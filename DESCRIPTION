@@ -1,9 +1,9 @@
 Package: MLBScrapeR
-Title: What the Package Does (One Line, Title Case)
+Title: Scrape live data from MLB Stats API
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+    person("Ben", "Resnic", , "bsresnic@syr.edu", role = c("aut", "cre"))
+Description: Provides functions to scrape live data from MLB Stats API
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
