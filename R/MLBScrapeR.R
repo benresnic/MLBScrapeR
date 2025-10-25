@@ -323,7 +323,7 @@ MLB_Scrape <- R6::R6Class(
               pre_df <- tibble(origin = origin, id = ids, name = nms) %>%
                 filter(!is.na(origin) & origin %in% c("1B","2B","3B")) %>%
                 distinct(origin, id, .keep_all = TRUE) %>%
-                group_by(origin) %>% dplyr::slice_head(n = 1) %>% dplyr::ungroup()
+                dplyr::group_by(origin) %>% dplyr::slice_head(n = 1) %>% dplyr::ungroup()
 
               if ("1B" %in% pre_df$origin) {
                 pre1_id <- pre_df$id  [pre_df$origin == "1B"][1]; pre1_nm <- pre_df$name[pre_df$origin == "1B"][1]
