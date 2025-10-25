@@ -1,6 +1,6 @@
 
 
-R package for scraping live data from the MLB Stats API
+## R package for scraping live data from the MLB Stats API
 
 Shoutout @TJStats on twitter for the inspiration and structure
 
