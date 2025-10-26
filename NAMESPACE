@@ -3,6 +3,8 @@
 export(get_data_json)
 export(get_game_types)
 export(get_pbp_data)
+export(get_pbp_player)
+export(get_pbp_season)
 export(get_player_games_list)
 export(get_players)
 export(get_schedule)
