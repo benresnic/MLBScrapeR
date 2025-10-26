@@ -107,7 +107,13 @@ get_player_games_list <- function(player_id,
   )
 }
 
-#' Get pbp data for a season
+#' Get play-by-play for a set of seasons (optionally date-bounded)
+#'
+#' @param season Integer vector of seasons, e.g. 2025 or c(2024, 2025).
+#' @param start_date,end_date Optional "YYYY-MM-DD" bounds.
+#' @param sport_id Integer vector, default 1 (MLB).
+#' @param game_type Character vector, default "R".
+#' @return A tibble of PBP rows for the selected games.
 #' @export
 get_pbp_season <- function(season = c(2025),
                            start_date = NULL,
@@ -120,7 +126,15 @@ get_pbp_season <- function(season = c(2025),
   )
 }
 
-#' Get pbp data for a player
+#' Get play-by-play for games a player appeared in
+#'
+#' @param player_id Six-digit MLBAM player id.
+#' @param season Integer season (or vector).
+#' @param start_date,end_date Optional "YYYY-MM-DD".
+#' @param sport_id Integer, default 1.
+#' @param game_type Character, default "R".
+#' @param pitching Logical; if TRUE, fetch games pitched (passed through to helper).
+#' @return A tibble of PBP rows from the player's games.
 #' @export
 get_pbp_player <- function(player_id,
                            season = c(2025),
