@@ -40,9 +40,9 @@ MLB_Scrape <- R6::R6Class(
       as.data.frame(data)
     },
     
-    get_schedule = function(year_input = c(2024), sport_id = c(1), game_type = c('R')) {
-      if (!is.vector(year_input) || !all(sapply(year_input, is.numeric))) {
-        stop("year_input must be a vector of integers.")
+    get_schedule = function(season = c(2025), sport_id = c(1), game_type = c('R')) {
+      if (!is.vector(season) || !all(sapply(season, is.numeric))) {
+        stop("season must be a vector of integers.")
       }
       if (!is.vector(sport_id) || !all(sapply(sport_id, is.numeric))) {
         stop("sport_id must be a vector of integers.")
@@ -51,12 +51,12 @@ MLB_Scrape <- R6::R6Class(
         stop("game_type must be a vector of strings.")
       }
       
-      year_input_str <- paste(year_input, collapse = ",")
+      season_str <- paste(season, collapse = ",")
       sport_id_str <- paste(sport_id, collapse = ",")
       game_type_str <- paste(game_type, collapse = ",")
       
       game_call <- GET(paste0("https://statsapi.mlb.com/api/v1/schedule/?sportId=", sport_id_str, 
-                        "&gameTypes=", game_type_str, "&season=", year_input_str, 
+                        "&gameTypes=", game_type_str, "&season=", season_str, 
                         "&hydrate=lineup,players"))
 
       game_call_data <- content(game_call, "text", encoding = "UTF-8")
