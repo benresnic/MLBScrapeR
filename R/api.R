@@ -106,3 +106,53 @@ get_player_games_list <- function(player_id,
     sport_id = sport_id
   )
 }
+
+#' Get pbp data for a season
+#'
+#' @param season Integer vector of years.
+#' @param start_date,end_date Optional YYYY-MM-DD strings.
+#' @param sport_id Integer.
+#' @param game_type Character vector (e.g., "R").
+#' @return PBP data for a season
+#' @export
+get_pbp_season <- function(season = c(2025), 
+                              start_date = NULL, 
+                              end_date = NULL,
+                              sport_id = c(1), 
+                              game_type = c('R')){
+      .get_client()$get_pbp_season(
+        season = season,
+        start_date = start_date,
+        end_date = end_date,
+        sport_id = sport_id,
+        game_type = game_type
+      )
+    }
+
+#' Get pbp data for a player
+#'
+#' @param player_id Integer MLBAM ID.
+#' @param season Integer vector of years.
+#' @param start_date,end_date Optional YYYY-MM-DD strings.
+#' @param game_type Character vector (e.g., "R").
+#' @param sport_id Integer.
+#' @return PBP data for a player
+#' @export
+get_pbp_player = function(player_id, 
+                          season = c(2025), 
+                          start_date = NULL, 
+                          end_date = NULL,
+                          game_type = c('R'),
+                          sport_id = c(1)){
+  .get_client()$get_pbp_player(
+        player_id = player_id,
+        season = season,
+        start_date = start_date,
+        end_date = end_date,
+        game_type = game_type
+        sport_id = sport_id
+      )
+    }
+
+  }
+
