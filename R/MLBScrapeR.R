@@ -111,16 +111,16 @@ MLB_Scrape <- R6::R6Class(
     },
     get_pbp_data = function(data_list) {
 
+     
       pb <- progress_bar$new(
         format = "Binding Data [:bar] :percent (:current/:total)",
         total = length(data_list),
         clear = FALSE,
         width = 60
       )
-
+    
       `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
-
-
+    
       .gv <- function(row, flat, nested) {
         if (length(flat) == 1 && flat %in% names(row)) return(row[[flat]])
         v <- if (flat %in% names(row)) row[[flat]] else NA
@@ -133,23 +133,157 @@ MLB_Scrape <- R6::R6Class(
         }
         x %||% NA
       }
-
-
+    
+      .get_ab_index <- function(ed) {
+        if ("atBatIndex" %in% names(ed)) {
+          as.integer(ed$atBatIndex)
+        } else if ("about.atBatIndex" %in% names(ed)) {
+          as.integer(ed$`about.atBatIndex`)
+        } else {
+          vapply(ed$about, function(a) as.integer(a$atBatIndex %||% NA_integer_), integer(1))
+        }
+      }
+    
+      .safe_post_on_id <- function(ed, base_tag = c("First","Second","Third")) {
+        base_tag <- match.arg(base_tag)
+        flat_col <- paste0("matchup.postOn", base_tag, ".id")
+        if (flat_col %in% names(ed)) {
+          return(suppressWarnings(as.integer(ed[[flat_col]])))
+        }
+        n <- NROW(ed)
+        if (is.null(n) || n == 0) return(integer())
+        vapply(seq_len(n), function(i) {
+          mu <- ed$matchup[[i]]
+          if (is.null(mu)) return(NA_integer_)
+          slot <- switch(base_tag,
+                         First  = "postOnFirst",
+                         Second = "postOnSecond",
+                         Third  = "postOnThird")
+          val <- tryCatch(mu[[slot]]$id, error = function(e) NA_integer_)
+          if (is.null(val) || length(val) == 0) NA_integer_ else as.integer(val[1])
+        }, integer(1))
+      }
+    
+      .safe_post_outs <- function(ed) {
+        if ("count.outs" %in% names(ed)) {
+          return(suppressWarnings(as.integer(ed$`count.outs`)))
+        }
+        n <- NROW(ed)
+        if (is.null(n) || n == 0) return(integer())
+        vapply(seq_len(n), function(i) {
+          cnt <- ed$count[[i]]
+          if (!is.null(cnt) && !is.null(cnt$outs)) as.integer(cnt$outs) else NA_integer_
+        }, integer(1))
+      }
+    
+      .ghost_flags <- function(ed) {
+        n <- NROW(ed)
+        if (is.null(n) || n == 0) return(logical())
+        vapply(seq_len(n), function(i) {
+          pe <- ed$playEvents[[i]]
+          if (is.null(pe) || !is.data.frame(pe) || nrow(pe) == 0) return(FALSE)
+          if ("details.event" %in% names(pe)) {
+            any(pe$`details.event` == "Runner Placed On Base", na.rm = TRUE)
+          } else {
+            any(vapply(seq_len(nrow(pe)), function(j) {
+              det <- tryCatch(pe$details[[j]], error = function(e) NULL)
+              !is.null(det) && !is.null(det$event) && identical(det$event, "Runner Placed On Base")
+            }, logical(1)))
+          }
+        }, logical(1))
+      }
+    
+      .ghost_id_for_each_ab <- function(ed) {
+        n <- NROW(ed)
+        if (is.null(n) || n == 0) return(integer())
+        vapply(seq_len(n), function(i) {
+          pe <- ed$playEvents[[i]]
+          if (is.null(pe) || !is.data.frame(pe) || nrow(pe) == 0) return(NA_integer_)
+          idx <- integer(0)
+          if ("details.event" %in% names(pe)) {
+            idx <- which(pe$`details.event` == "Runner Placed On Base")
+          } else {
+            idx <- which(vapply(seq_len(nrow(pe)), function(j) {
+              det <- tryCatch(pe$details[[j]], error = function(e) NULL)
+              !is.null(det) && !is.null(det$event) && identical(det$event, "Runner Placed On Base")
+            }, logical(1)))
+          }
+          if (!length(idx)) return(NA_integer_)
+          j <- idx[1]
+          if ("player.id" %in% names(pe)) {
+            zid <- suppressWarnings(as.integer(pe$`player.id`[j]))
+            if (!is.na(zid)) return(zid)
+          }
+          if ("player" %in% names(pe)) {
+            p <- pe$player[[j]]
+            if (!is.null(p) && !is.null(p$id)) return(as.integer(p$id))
+          }
+          NA_integer_
+        }, integer(1))
+      }
+    
+      track_base_out_by_event <- function(event_data) {
+        n <- NROW(event_data)
+        if (is.null(n) || n == 0) {
+          return(tibble::tibble(
+            event_index = integer(),
+            pre_runner_1b_id = integer(), pre_runner_2b_id = integer(), pre_runner_3b_id = integer(), pre_outs = integer(),
+            post_runner_1b_id = integer(), post_runner_2b_id = integer(), post_runner_3b_id = integer(), post_outs = integer()
+          ))
+        }
+    
+        ei <- .get_ab_index(event_data)
+    
+        post_first  <- .safe_post_on_id(event_data, "First")
+        post_second <- .safe_post_on_id(event_data, "Second")
+        post_third  <- .safe_post_on_id(event_data, "Third")
+        post_outs   <- .safe_post_outs(event_data)
+    
+        post_state <- tibble::tibble(
+          event_index = ei,
+          post_runner_1b_id = post_first,
+          post_runner_2b_id = post_second,
+          post_runner_3b_id = post_third,
+          post_outs         = post_outs
+        )
+    
+        pre_state <- post_state |>
+          dplyr::transmute(
+            event_index,
+            pre_runner_1b_id = dplyr::lag(post_runner_1b_id, 1),
+            pre_runner_2b_id = dplyr::lag(post_runner_2b_id, 1),
+            pre_runner_3b_id = dplyr::lag(post_runner_3b_id, 1),
+            pre_outs         = dplyr::lag(post_outs, 1, default = 0) %% 3
+          )
+    
+        z_flag <- .ghost_flags(event_data)
+        if (any(z_flag, na.rm = TRUE)) {
+          z_ids <- .ghost_id_for_each_ab(event_data)
+          pre_state$pre_runner_2b_id[z_flag] <- z_ids[z_flag]
+        }
+    
+        dplyr::left_join(pre_state, post_state, by = "event_index") |>
+          dplyr::select(event_index, dplyr::starts_with("pre_"), dplyr::starts_with("post_"))
+      }
+    
       swing_codes <- c("X","F","S","D","E","T","W")
       whiff_codes <- c("S","T","W")
-      csw_codes <- c("S","T","W", "C")
-
-      out <- vector("list", 0L)
-
+      csw_codes   <- c("S","T","W","C")
+    
+      out_rows <- vector("list", 0L)
+    
       for (g in data_list) {
         if (!is.list(g) || !is.null(g$error)) next
-
+    
         at_bats <- g$liveData$plays$allPlays
-        if (is.null(at_bats) || NROW(at_bats) == 0L) next
-
+        if (is.null(at_bats) || NROW(at_bats) == 0L) { pb$tick(); next }
+    
+        bos_evt <- track_base_out_by_event(at_bats)
+        bos_idx <- if (nrow(bos_evt)) setNames(seq_len(nrow(bos_evt)), bos_evt$event_index) else integer()
+    
         home <- g$gameData$teams$home
         away <- g$gameData$teams$away
-
+    
         home_team         <- home$name %||% home$abbreviation %||% NA
         home_level_id     <- (home$sport$id %||% home$league$id) %||% NA_integer_
         home_level_name   <- (home$sport$name %||% home$league$name) %||% NA_character_
@@ -157,7 +291,7 @@ MLB_Scrape <- R6::R6Class(
         home_parentorg_nm <- (home$parentOrgName %||% home$parentOrg$name) %||% NA_character_
         home_league_id    <- home$league$id %||% NA_integer_
         home_league_name  <- home$league$name %||% NA_character_
-
+    
         away_team         <- away$name %||% away$abbreviation %||% NA
         away_level_id     <- (away$sport$id %||% away$league$id) %||% NA_integer_
         away_level_name   <- (away$sport$name %||% away$league$name) %||% NA_character_
@@ -165,33 +299,47 @@ MLB_Scrape <- R6::R6Class(
         away_parentorg_nm <- (away$parentOrgName %||% away$parentOrg$name) %||% NA_character_
         away_league_id    <- away$league$id %||% NA_integer_
         away_league_name  <- away$league$name %||% NA_character_
-
+    
+        players_list <- g$gameData$players %||% list()
+        id_to_name <- function(id) {
+          if (is.na(id)) return(NA_character_)
+          key <- paste0("ID", as.character(id))
+          pl  <- players_list[[key]]
+          if (is.null(pl)) return(NA_character_)
+          nm <- pl$fullName %||% NA_character_
+          if (is.null(nm)) NA_character_ else nm
+        }
+    
+        
         for (i in seq_len(NROW(at_bats))) {
           ab <- at_bats[i, , drop = FALSE]
-
+    
           pidx0 <- ab$pitchIndex[[1]]
           if (is.null(pidx0) || !length(pidx0)) next
-
+    
           evs <- ab$playEvents[[1]]
           if (is.null(evs) || NROW(evs) == 0L) next
-
+    
           pidx <- as.integer(pidx0) + 1L
           pidx <- pidx[pidx >= 1L & pidx <= NROW(evs)]
           if (!length(pidx)) next
-
+    
           is_top <- if ("about.isTopInning" %in% names(ab)) ab$`about.isTopInning` else ab$about[[1]]$isTopInning
           batting_team  <- if (isTRUE(is_top)) away$abbreviation %||% NA else home$abbreviation %||% NA
           fielding_team <- if (isTRUE(is_top)) home$abbreviation %||% NA else away$abbreviation %||% NA
-
+    
+          ei <- if ("atBatIndex" %in% names(ab)) ab$atBatIndex else ab$about[[1]]$atBatIndex
+          boe <- if (length(bos_idx)) bos_evt[ bos_idx[[as.character(ei)]] , ] else NULL
+    
           for (j in seq_along(pidx)) {
             k <- pidx[j]
             row_e <- evs[k, , drop = FALSE]
             last_pitch <- j == length(pidx)
-
+    
             sA <- .gv(row_e, "count.strikes", c("count","strikes"))
             bA <- .gv(row_e, "count.balls",   c("count","balls"))
             oA <- .gv(row_e, "count.outs",    c("count","outs"))
-
+    
             if (k > 1L) {
               prev <- evs[k-1L, , drop = FALSE]
               sB <- .gv(prev, "count.strikes", c("count","strikes"))
@@ -200,93 +348,56 @@ MLB_Scrape <- R6::R6Class(
             } else {
               sB <- 0L; bB <- 0L; oB <- oA
             }
-
+    
             code <- .gv(row_e, "details.code", c("details","code"))
-
             is_pitch_val <- isTRUE(.gv(row_e, "isPitch", "isPitch"))
             code_val <- if (is.null(code) || length(code) == 0) NA_character_ else as.character(code)
-
+    
             is_swing <- if (is_pitch_val) {
               if (!is.na(code_val)) as.integer(code_val %in% swing_codes) else NA_integer_
-            } else {
-              NA_integer_
-            }
-
+            } else NA_integer_
+    
             is_csw <- if (is_pitch_val) {
               if (!is.na(code_val)) as.integer(code_val %in% csw_codes) else NA_integer_
-            } else {
-              NA_integer_
-            }
-
+            } else NA_integer_
+    
             is_whiff <- if (is_pitch_val && !is.na(code_val) && (code_val %in% swing_codes)) {
               as.integer(code_val %in% whiff_codes)
-            } else {
-              NA_integer_
-            }
-
+            } else NA_integer_
+    
             pitch_zone <- suppressWarnings(
               as.integer(.gv(row_e, "pitchData.zone", c("pitchData","zone")))
             )
-
+    
             in_zone <- if (is_pitch_val && !is.na(pitch_zone)) {
               if (pitch_zone < 10L) 1L else 0L
-            } else {
-              NA_integer_
-            }
-
+            } else NA_integer_
+    
             is_chase <- if (is_pitch_val && is_swing == 1L) {
-              if (is.na(in_zone)) {
-                NA_integer_
-              } else if (in_zone == 0L) {
-                1L
-              } else {
-                0L
-              }
-            } else {
-              NA_integer_
-            }
-
+              if (is.na(in_zone)) NA_integer_ else if (in_zone == 0L) 1L else 0L
+            } else NA_integer_
+    
             in_zone_whiff <- if (is_pitch_val && is_swing == 1L && !is.na(in_zone) && in_zone == 1L) {
               if (isTRUE(is_whiff)) 1L else 0L
-            } else {
-              NA_integer_
-            }
+            } else NA_integer_
+    
             in_play_flag <- isTRUE(.gv(row_e, "details.isInPlay", c("details","isInPlay")))
             ev  <- suppressWarnings(as.numeric(.gv(row_e, "hitData.launchSpeed", c("hitData","launchSpeed"))))
             ang <- suppressWarnings(as.numeric(.gv(row_e, "hitData.launchAngle",  c("hitData","launchAngle"))))
-
-            in_play <- if (is_pitch_val){
-              as.integer(in_play_flag)
-            } else {
-              NA_integer_
-            }
-
+            in_play <- if (is_pitch_val) as.integer(in_play_flag) else NA_integer_
+    
             is_barrel <- if (in_play_flag) {
               if (!is.na(ev) && !is.na(ang)) {
-                as.integer((ev * 1.5 - ang) >= 117 &&
-                             (ev + ang) >= 124 &&
-                             ang <= 50 &&
-                             ev >= 98)
-              } else {
-                NA_integer_
-              }
-            } else {
-              NA_integer_
-            }
-
-            is_hard_hit <- if (in_play_flag){
-              if (!is.na(ev) && !is.na(ang)) {
-                as.integer(ev >= 95)
-              } else {
-                NA_integer_
-              }
-            } else {
-              NA_integer_
-            }
-
+                as.integer((ev * 1.5 - ang) >= 117 && (ev + ang) >= 124 && ang <= 50 && ev >= 98)
+              } else NA_integer_
+            } else NA_integer_
+    
+            is_hard_hit <- if (in_play_flag) {
+              if (!is.na(ev) && !is.na(ang)) as.integer(ev >= 95) else NA_integer_
+            } else NA_integer_
+    
             if (i > 1L) {
               prev_ab <- at_bats[i - 1L, , drop = FALSE]
-
               pre_away_score_val <- suppressWarnings(as.integer(
                 if ("result.awayScore" %in% names(prev_ab)) {
                   prev_ab$`result.awayScore`
@@ -295,7 +406,6 @@ MLB_Scrape <- R6::R6Class(
                   prev_ab$result[[1]]$awayScore
                 } else NA
               ))
-
               pre_home_score_val <- suppressWarnings(as.integer(
                 if ("result.homeScore" %in% names(prev_ab)) {
                   prev_ab$`result.homeScore`
@@ -308,140 +418,119 @@ MLB_Scrape <- R6::R6Class(
               pre_away_score_val <- 0L
               pre_home_score_val <- 0L
             }
-
-            pre1_id <- pre1_nm <- pre2_id <- pre2_nm <- pre3_id <- pre3_nm <- NA
-            rf <- if ("runners" %in% names(ab)) ab$runners[[1]] else NULL
-
-            if (is.data.frame(rf) && nrow(rf) > 0) {
-              origin <- if ("movement.originBase" %in% names(rf)) rf$`movement.originBase`
-              else if ("movement.start" %in% names(rf)) rf$`movement.start`
-              else rep(NA_character_, nrow(rf))
-
-              ids <- if ("details.runner.id" %in% names(rf)) rf$`details.runner.id` else NA_integer_
-              nms <- if ("details.runner.fullName" %in% names(rf)) rf$`details.runner.fullName` else NA_character_
-
-              pre_df <- tibble(origin = origin, id = ids, name = nms) %>%
-                filter(!is.na(origin) & origin %in% c("1B","2B","3B")) %>%
-                distinct(origin, id, .keep_all = TRUE) %>%
-                dplyr::group_by(origin) %>% dplyr::slice_head(n = 1) %>% dplyr::ungroup()
-
-              if ("1B" %in% pre_df$origin) {
-                pre1_id <- pre_df$id  [pre_df$origin == "1B"][1]; pre1_nm <- pre_df$name[pre_df$origin == "1B"][1]
-              }
-              if ("2B" %in% pre_df$origin) {
-                pre2_id <- pre_df$id  [pre_df$origin == "2B"][1]; pre2_nm <- pre_df$name[pre_df$origin == "2B"][1]
-              }
-              if ("3B" %in% pre_df$origin) {
-                pre3_id <- pre_df$id  [pre_df$origin == "3B"][1]; pre3_nm <- pre_df$name[pre_df$origin == "3B"][1]
-              }
+    
+            if (!is.null(boe) && nrow(boe) == 1) {
+              pre1_id  <- boe$pre_runner_1b_id
+              pre2_id  <- boe$pre_runner_2b_id
+              pre3_id  <- boe$pre_runner_3b_id
+              post1_id <- boe$post_runner_1b_id
+              post2_id <- boe$post_runner_2b_id
+              post3_id <- boe$post_runner_3b_id
+              pre_outs_val  <- boe$pre_outs
+              post_outs_val <- boe$post_outs
+            } else {
+              pre1_id <- pre2_id <- pre3_id <- post1_id <- post2_id <- post3_id <- NA_integer_
+              pre_outs_val <- post_outs_val <- NA_integer_
             }
-
-
+    
             r <- list(
               game_id    = g$gamePk %||% NA,
               game_date  = g$gameData$datetime$officialDate %||% NA,
               play_id    = .gv(row_e, "playId", "playId"),
-              is_pitch    = .gv(row_e, "isPitch", "isPitch"),
+              is_pitch   = .gv(row_e, "isPitch", "isPitch"),
               away_score = pre_away_score_val,
               home_score = pre_home_score_val,
               top_bottom = if ("about.halfInning" %in% names(ab)) ab$`about.halfInning` else ab$about[[1]]$halfInning,
-              inning    = if ("about.inning" %in% names(ab)) ab$`about.inning` else ab$about[[1]]$inning,
-              ab_number    = ab$atBatIndex %||% NA_integer_,
+              inning     = if ("about.inning" %in% names(ab)) ab$`about.inning` else ab$about[[1]]$inning,
+              ab_number  = ab$atBatIndex %||% NA_integer_,
               pitch_number = j,
-              batter_id  = if ("matchup.batter.id" %in% names(ab)) ab$`matchup.batter.id` else ab$matchup[[1]]$batter$id,
-              batter_name = if ("matchup.batter.fullName" %in% names(ab)) ab$`matchup.batter.fullName` else ab$matchup[[1]]$batter$fullName,
-              batter_side    = if ("matchup.batSide.code" %in% names(ab)) ab$`matchup.batSide.code` else ab$matchup[[1]]$batSide$code,
-              pitcher_id       = if ("matchup.pitcher.id" %in% names(ab)) ab$`matchup.pitcher.id` else ab$matchup[[1]]$pitcher$id,
+              batter_id    = if ("matchup.batter.id" %in% names(ab)) ab$`matchup.batter.id` else ab$matchup[[1]]$batter$id,
+              batter_name  = if ("matchup.batter.fullName" %in% names(ab)) ab$`matchup.batter.fullName` else ab$matchup[[1]]$batter$fullName,
+              batter_side  = if ("matchup.batSide.code" %in% names(ab)) ab$`matchup.batSide.code` else ab$matchup[[1]]$batSide$code,
+              pitcher_id   = if ("matchup.pitcher.id" %in% names(ab)) ab$`matchup.pitcher.id` else ab$matchup[[1]]$pitcher$id,
               pitcher_name = if ("matchup.pitcher.fullName" %in% names(ab)) ab$`matchup.pitcher.fullName` else ab$matchup[[1]]$pitcher$fullName,
-              pitcher_side   = if ("matchup.pitchHand.code" %in% names(ab)) ab$`matchup.pitchHand.code` else ab$matchup[[1]]$pitchHand$code,
-              batter_split    = if ("matchup.splits.batter" %in% names(ab)) ab$`matchup.splits.batter` else ab$matchup[[1]]$splits$batter %||% NA,
-              pitcher_split  = if ("matchup.splits.pitcher" %in% names(ab)) ab$`matchup.splits.pitcher` else ab$matchup[[1]]$splits$pitcher %||% NA,
-              runners_on_base = if ("matchup.splits.menOnBase" %in% names(ab)) ab$`matchup.splits.menOnBase` else ab$matchup[[1]]$splits$menOnBase %||% NA,
-              balls   = as.integer(bB),
-              strikes = as.integer(sB),
-              outs  = as.integer(oB),
-              is_strike      = .gv(row_e, "details.isStrike",    c("details","isStrike")),
+              pitcher_side = if ("matchup.pitchHand.code" %in% names(ab)) ab$`matchup.pitchHand.code` else ab$matchup[[1]]$pitchHand$code,
+              batter_split   = if ("matchup.splits.batter" %in% names(ab)) ab$`matchup.splits.batter` else ab$matchup[[1]]$splits$batter %||% NA,
+              pitcher_split  = if ("matchup.splits.pitcher" %in% names(ab)) ab$`matchup.splits.pitcher` 
+              else ab$matchup[[1]]$splits$pitcher %||% NA,
+              runners_on_base= if ("matchup.splits.menOnBase" %in% names(ab)) ab$`matchup.splits.menOnBase` 
+              else ab$matchup[[1]]$splits$menOnBase %||% NA,
+              balls = as.integer(bB), 
+              strikes = as.integer(sB), 
+              outs = as.integer(oB),
+              balls_post = as.integer(bA), 
+              strikes_post = as.integer(sA), 
+              outs_post = as.integer(oA),
+              is_strike   = .gv(row_e, "details.isStrike",    c("details","isStrike")),
               is_ball     = .gv(row_e, "details.isBall",      c("details","isBall")),
               last_pitch_of_ab = if (last_pitch) 1L else 0L,
-              play_type       = .gv(row_e, "type", "type"),
-              description    = .gv(row_e, "details.description", c("details","description")),
-              pitch_call_code           = code,
-              pitch_call = .gv(row_e, "details.call.description", c("details","call","description")),
-              pitch_type   = .gv(row_e, "details.type.code",        c("details","type","code")),
-              pitch_name= .gv(row_e, "details.type.description", c("details","type","description")),
-              is_swing = is_swing,
-              is_whiff = is_whiff,
-              in_zone = in_zone,
-              is_chase = is_chase,
+              play_type     = .gv(row_e, "type", "type"),
+              description   = .gv(row_e, "details.description", c("details","description")),
+              pitch_code    = code,
+              pitch_call_code = .gv(row_e, "details.call.code",        c("details","call","code")),
+              pitch_call    = .gv(row_e, "details.call.description",   c("details","call","description")),
+              pitch_type    = .gv(row_e, "details.type.code",          c("details","type","code")),
+              pitch_name    = .gv(row_e, "details.type.description",   c("details","type","description")),
+              is_swing      = is_swing,
+              is_csw        = is_csw,
+              is_whiff      = is_whiff,
+              in_zone       = in_zone,
+              is_chase      = is_chase,
               in_zone_whiff = in_zone_whiff,
-              is_barrel = is_barrel,
-              is_hard_hit = is_hard_hit,
-              in_play = in_play,
-              sz_top    = .gv(row_e, "pitchData.strikeZoneTop",    c("pitchData","strikeZoneTop")) * 12,
-              sz_bot = .gv(row_e, "pitchData.strikeZoneBottom", c("pitchData","strikeZoneBottom")) * 12,
-              velocity      = .gv(row_e, "pitchData.startSpeed",       c("pitchData","startSpeed")),
-              end_velocity     = .gv(row_e, "pitchData.endSpeed",         c("pitchData","endSpeed")),
-              plate_time      = .gv(row_e, "pitchData.plateTime",        c("pitchData","plateTime")),
-              vb  = .gv(row_e, "pitchData.breaks.breakVertical",           c("pitchData","breaks","breakVertical")),
-              ivb = .gv(row_e, "pitchData.breaks.breakVerticalInduced",    c("pitchData","breaks","breakVerticalInduced")),
-              hb  = .gv(row_e, "pitchData.breaks.breakHorizontal",         c("pitchData","breaks","breakHorizontal")),
-              break_angle    = .gv(row_e, "pitchData.breaks.breakAngle",    c("pitchData","breaks","breakAngle")),
-              break_length   = .gv(row_e, "pitchData.breaks.breakLength",   c("pitchData","breaks","breakLength")),
-              spin_rate     = .gv(row_e, "pitchData.breaks.spinRate",      c("pitchData","breaks","spinRate")),
-              spin_direction = .gv(row_e, "pitchData.breaks.spinDirection", c("pitchData","breaks","spinDirection")),
-              zone          = .gv(row_e, "pitchData.zone",             c("pitchData","zone")),
-              extension    = .gv(row_e, "pitchData.extension",        c("pitchData","extension")),
+              is_barrel     = is_barrel,
+              is_hard_hit   = is_hard_hit,
+              in_play       = in_play,
+              sz_top     = 12 * .gv(row_e, "pitchData.strikeZoneTop",    c("pitchData","strikeZoneTop")),
+              sz_bot     = 12 * .gv(row_e, "pitchData.strikeZoneBottom", c("pitchData","strikeZoneBottom")),
+              velocity   = .gv(row_e, "pitchData.startSpeed",            c("pitchData","startSpeed")),
+              end_velocity = .gv(row_e, "pitchData.endSpeed",            c("pitchData","endSpeed")),
+              vb        = .gv(row_e, "pitchData.breaks.breakVertical",           c("pitchData","breaks","breakVertical")),
+              ivb       = .gv(row_e, "pitchData.breaks.breakVerticalInduced",    c("pitchData","breaks","breakVerticalInduced")),
+              hb        = .gv(row_e, "pitchData.breaks.breakHorizontal",         c("pitchData","breaks","breakHorizontal")),
+              zone      = .gv(row_e, "pitchData.zone",                   c("pitchData","zone")),
+              plate_time= .gv(row_e, "pitchData.plateTime",              c("pitchData","plateTime")),
+              extension = .gv(row_e, "pitchData.extension",              c("pitchData","extension")),
               aX = .gv(row_e, "pitchData.coordinates.aX", c("pitchData","coordinates","aX")),
               aY = .gv(row_e, "pitchData.coordinates.aY", c("pitchData","coordinates","aY")),
               aZ = .gv(row_e, "pitchData.coordinates.aZ", c("pitchData","coordinates","aZ")),
-              plate_x= .gv(row_e, "pitchData.coordinates.pX",  c("pitchData","coordinates","pX")) * 12,
-              plate_z = .gv(row_e, "pitchData.coordinates.pZ",  c("pitchData","coordinates","pZ")) * 12,
-              vx0= .gv(row_e, "pitchData.coordinates.vX0", c("pitchData","coordinates","vX0")),
-              vy0 = .gv(row_e, "pitchData.coordinates.vY0", c("pitchData","coordinates","vY0")),
-              vz0 = .gv(row_e, "pitchData.coordinates.vZ0", c("pitchData","coordinates","vZ0")),
+              plate_x = 12 * .gv(row_e, "pitchData.coordinates.pX",  c("pitchData","coordinates","pX")),
+              plate_z = 12 * .gv(row_e, "pitchData.coordinates.pZ",  c("pitchData","coordinates","pZ")),
+              vx0    = .gv(row_e, "pitchData.coordinates.vX0", c("pitchData","coordinates","vX0")),
+              vy0    = .gv(row_e, "pitchData.coordinates.vY0", c("pitchData","coordinates","vY0")),
+              vz0    = .gv(row_e, "pitchData.coordinates.vZ0", c("pitchData","coordinates","vZ0")),
               release_x = .gv(row_e, "pitchData.coordinates.x0",  c("pitchData","coordinates","x0")),
               release_y = .gv(row_e, "pitchData.coordinates.y0",  c("pitchData","coordinates","y0")),
               release_z = .gv(row_e, "pitchData.coordinates.z0",  c("pitchData","coordinates","z0")),
-              exit_velocity    = .gv(row_e, "hitData.launchSpeed",   c("hitData","launchSpeed")),
-              launch_angle    = .gv(row_e, "hitData.launchAngle",   c("hitData","launchAngle")),
+              break_angle  = .gv(row_e, "pitchData.breaks.breakAngle",    c("pitchData","breaks","breakAngle")),
+              spin_rate    = .gv(row_e, "pitchData.breaks.spinRate",      c("pitchData","breaks","spinRate")),
+              spin_direction = .gv(row_e, "pitchData.breaks.spinDirection", c("pitchData","breaks","spinDirection")),
+              exit_velocity = .gv(row_e, "hitData.launchSpeed",   c("hitData","launchSpeed")),
+              launch_angle  = .gv(row_e, "hitData.launchAngle",   c("hitData","launchAngle")),
               hit_distance  = .gv(row_e, "hitData.totalDistance", c("hitData","totalDistance")),
-              hit_trakectory    = .gv(row_e, "hitData.trajectory",    c("hitData","trajectory")),
-              hit_hardness      = .gv(row_e, "hitData.hardness",      c("hitData","hardness")),
-              hit_location      = .gv(row_e, "hitData.location",      c("hitData","location")),
+              hit_trajectory= .gv(row_e, "hitData.trajectory",    c("hitData","trajectory")),
+              hit_hardness  = .gv(row_e, "hitData.hardness",      c("hitData","hardness")),
+              hit_location  = .gv(row_e, "hitData.location",      c("hitData","location")),
               hit_coordinate_x = .gv(row_e, "hitData.coordinates.coordX", c("hitData","coordinates","coordX")),
               hit_coordinate_z = .gv(row_e, "hitData.coordinates.coordY", c("hitData","coordinates","coordY")),
-              event = if (last_pitch) (if ("result.event" %in% names(ab)) ab$`result.event`
-                                       else ab$result[[1]]$event) else NA,
-              event_type = if (last_pitch) (if ("result.eventType" %in% names(ab)) ab$`result.eventType`
-                                            else ab$result[[1]]$eventType) else NA,
-              play_description = if (last_pitch) (if ("result.description" %in% names(ab)) ab$`result.description`
-                                                  else ab$result[[1]]$description) else NA,
-              rbi = if (last_pitch) (if ("result.rbi" %in% names(ab)) ab$`result.rbi` else ab$result[[1]]$rbi) else NA,
-              scoring_play = if ("about.isScoringPlay" %in% names(ab)) ab$`about.isScoringPlay`else
-                ab$about[[1]]$isScoringPlay,
+              event            = if (last_pitch) (if ("result.event" %in% names(ab)) ab$`result.event` else ab$result[[1]]$event) else NA,
+              event_type       = if (last_pitch) (if ("result.eventType" %in% names(ab)) ab$`result.eventType` else ab$result[[1]]$eventType) else NA,
+              play_description = if (last_pitch) (if ("result.description" %in% names(ab)) ab$`result.description` else ab$result[[1]]$description) else NA,
+              rbi              = if (last_pitch) (if ("result.rbi" %in% names(ab)) ab$`result.rbi` else ab$result[[1]]$rbi) else NA,
+              scoring_play     = if ("about.isScoringPlay" %in% names(ab)) ab$`about.isScoringPlay` else ab$about[[1]]$isScoringPlay,
               pre_runner_1b_id   = pre1_id,
-              pre_runner_1b_name = pre1_nm,
               pre_runner_2b_id   = pre2_id,
-              pre_runner_2b_name = pre2_nm,
               pre_runner_3b_id   = pre3_id,
-              pre_runner_3b_name = pre3_nm,
-              postrunner_1b_id  = if ("matchup.postOnFirst.id" %in% names(ab)) ab$`matchup.postOnFirst.id`
-              else ab$matchup[[1]]$postOnFirst$id %||% NA,
-              post_runner_1b_name = if ("matchup.postOnFirst.fullName" %in%
-                                        names(ab)) ab$`matchup.postOnFirst.fullName` else
-                                          ab$matchup[[1]]$postOnFirst$fullName %||% NA,
-              post_runner_2b_id  = if ("matchup.postOnSecond.id" %in%
-                                       names(ab)) ab$`matchup.postOnSecond.id` else
-                                         ab$matchup[[1]]$postOnSecond$id %||% NA,
-              post_runner_2b_name = if ("matchup.postOnSecond.fullName" %in%
-                                        names(ab)) ab$`matchup.postOnSecond.fullName` else
-                                          ab$matchup[[1]]$postOnSecond$fullName %||% NA,
-              post_runner_3b_id   = if ("matchup.postOnThird.id" %in%
-                                        names(ab)) ab$`matchup.postOnThird.id` else
-                                          ab$matchup[[1]]$postOnThird$id %||% NA,
-              post_runner_3b_name = if ("matchup.postOnThird.fullName" %in%
-                                        names(ab)) ab$`matchup.postOnThird.fullName` else
-                                          ab$matchup[[1]]$postOnThird$fullName %||% NA,
+              pre_outs           = pre_outs_val,
+              post_runner_1b_id   = post1_id,
+              post_runner_2b_id   = post2_id,
+              post_runner_3b_id   = post3_id,
+              post_outs          = post_outs_val,
+              pre_runner_1b_name  = id_to_name(pre1_id),
+              pre_runner_2b_name  = id_to_name(pre2_id),
+              pre_runner_3b_name  = id_to_name(pre3_id),
+              post_runner_1b_name = id_to_name(post1_id),
+              post_runner_2b_name = id_to_name(post2_id),
+              post_runner_3b_name = id_to_name(post3_id),
               home_team          = home_team,
               home_level_id      = home_level_id,
               home_level_name    = home_level_name,
@@ -459,18 +548,18 @@ MLB_Scrape <- R6::R6Class(
               batting_team  = batting_team,
               fielding_team = fielding_team
             )
-
-            out[[length(out) + 1L]] <- r
+    
+            out_rows[[length(out_rows) + 1L]] <- r
           }
         }
-
+    
         pb$tick()
       }
-
-      if (!length(out)) tibble()
-
-      data.table::rbindlist(out, use.names = TRUE, fill = TRUE) %>% as_tibble()
-
+    
+      if (!length(out_rows)) return(tibble::tibble())
+    
+      data.table::rbindlist(out_rows, use.names = TRUE, fill = TRUE) |>
+        tibble::as_tibble()
     },
     get_players = function(sport_id = c(1), season = c(2025)) {
 
