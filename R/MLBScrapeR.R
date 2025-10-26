@@ -670,55 +670,61 @@ MLB_Scrape <- R6::R6Class(
         arrange(team_id)
       
     }, 
-    get_pbp_season = function(season = c(2025), 
-                              start_date = NULL, 
-                              end_date = NULL,
-                              sport_id = c(1), 
-                              game_type = c('R')){
-      
-      schedule <- self$get_schedule(
+    get_pbp_season = function(season = c(2025),
+                          start_date = NULL,
+                          end_date   = NULL,
+                          sport_id   = c(1),
+                          game_type  = c("R")) {
+
+      sched <- self$get_schedule(
         season    = season,
         sport_id  = sport_id,
         game_type = game_type
-      )  %>% 
-        filter(state %in% c("F", "D", "I"))
-      
+      ) |>
+        dplyr::filter(.data$state %in% c("F","D","I"))
+    
       if (!is.null(start_date)) {
-        schedule <- schedule %>% dplyr::filter(date >= start_date)
+        start_date <- as.Date(start_date)
+        sched <- sched |> dplyr::filter(.data$date >= start_date)
       }
       if (!is.null(end_date)) {
-        schedule <- schedule %>% dplyr::filter(date <= end_date)
+        end_date <- as.Date(end_date)
+        sched <- sched |> dplyr::filter(.data$date <= end_date)
       }
-      
-      ids_list <- schedule %>%
-                  distinct(game_id) %>% 
-                  pull(game_id)
-      
-      
-      if (length(ids_list) == 0) {
-        tibble()
-      }
-      self$get_pbp_data(data_list = self$get_data_json(ids_list = ids_list)) 
+    
+      ids_list <- sched |>
+        dplyr::distinct(.data$game_id) |>
+        dplyr::pull(.data$game_id)
+    
+      if (!length(ids_list)) return(tibble::tibble())
+    
+      raw <- self$get_data_json(ids_list = ids_list)
+      if (!length(raw)) return(tibble::tibble())
+    
+      self$get_pbp_data(data_list = raw)
     },
-    get_pbp_player = function(player_id, 
-                               season = c(2025), 
-                               start_date = NULL, 
-                               end_date = NULL,
-                               game_type = c('R'),
-                               sport_id = c(1)){
-      
-      ids_list <- self$get_player_games_list(player_id = player_id,
-                                               season = season,
-                                               start_date = NULL, 
-                                               end_date = NULL,
-                                               game_type = game_type,
-                                               sport_id = sport_id)
-      
-      
-      
-      self$get_pbp_data(data_list = self$get_data_json(ids_list = ids_list)) 
-      
-      
+    get_pbp_player = function(player_id,
+                              season     = c(2025),
+                              start_date = NULL,
+                              end_date   = NULL,
+                              game_type  = c("R"),
+                              sport_id   = c(1)) {
+    
+      ids_list <- self$get_player_games_list(
+        player_id  = player_id,
+        season     = season,
+        start_date = start_date,  
+        end_date   = end_date,     
+        game_type  = game_type,
+        sport_id   = sport_id
+      )
+    
+      if (!length(ids_list)) return(tibble::tibble())
+    
+      raw <- self$get_data_json(ids_list = ids_list)
+      if (!length(raw)) return(tibble::tibble())
+    
+      self$get_pbp_data(data_list = raw)
     }
     
   )
