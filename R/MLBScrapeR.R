@@ -110,17 +110,17 @@ MLB_Scrape <- R6::R6Class(
       data_total
     }, 
     get_pbp_data = function(data_list) {
-
-     
+      
+      
       pb <- progress_bar$new(
         format = "Binding Data [:bar] :percent (:current/:total)",
         total = length(data_list),
         clear = FALSE,
         width = 60
       )
-    
+      
       `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
-    
+      
       .gv <- function(row, flat, nested) {
         if (length(flat) == 1 && flat %in% names(row)) return(row[[flat]])
         v <- if (flat %in% names(row)) row[[flat]] else NA
@@ -133,7 +133,7 @@ MLB_Scrape <- R6::R6Class(
         }
         x %||% NA
       }
-    
+      
       .get_ab_index <- function(ed) {
         if ("atBatIndex" %in% names(ed)) {
           as.integer(ed$atBatIndex)
@@ -143,7 +143,7 @@ MLB_Scrape <- R6::R6Class(
           vapply(ed$about, function(a) as.integer(a$atBatIndex %||% NA_integer_), integer(1))
         }
       }
-    
+      
       .safe_post_on_id <- function(ed, base_tag = c("First","Second","Third")) {
         base_tag <- match.arg(base_tag)
         flat_col <- paste0("matchup.postOn", base_tag, ".id")
@@ -163,7 +163,7 @@ MLB_Scrape <- R6::R6Class(
           if (is.null(val) || length(val) == 0) NA_integer_ else as.integer(val[1])
         }, integer(1))
       }
-    
+      
       .safe_post_outs <- function(ed) {
         if ("count.outs" %in% names(ed)) {
           return(suppressWarnings(as.integer(ed$`count.outs`)))
@@ -175,7 +175,7 @@ MLB_Scrape <- R6::R6Class(
           if (!is.null(cnt) && !is.null(cnt$outs)) as.integer(cnt$outs) else NA_integer_
         }, integer(1))
       }
-    
+      
       .ghost_flags <- function(ed) {
         n <- NROW(ed)
         if (is.null(n) || n == 0) return(logical())
@@ -192,7 +192,7 @@ MLB_Scrape <- R6::R6Class(
           }
         }, logical(1))
       }
-    
+      
       .ghost_id_for_each_ab <- function(ed) {
         n <- NROW(ed)
         if (is.null(n) || n == 0) return(integer())
@@ -221,7 +221,7 @@ MLB_Scrape <- R6::R6Class(
           NA_integer_
         }, integer(1))
       }
-    
+      
       track_base_out_by_event <- function(event_data) {
         n <- NROW(event_data)
         if (is.null(n) || n == 0) {
@@ -231,14 +231,14 @@ MLB_Scrape <- R6::R6Class(
             post_runner_1b_id = integer(), post_runner_2b_id = integer(), post_runner_3b_id = integer(), post_outs = integer()
           ))
         }
-    
+        
         ei <- .get_ab_index(event_data)
-    
+        
         post_first  <- .safe_post_on_id(event_data, "First")
         post_second <- .safe_post_on_id(event_data, "Second")
         post_third  <- .safe_post_on_id(event_data, "Third")
         post_outs   <- .safe_post_outs(event_data)
-    
+        
         post_state <- tibble::tibble(
           event_index = ei,
           post_runner_1b_id = post_first,
@@ -246,7 +246,7 @@ MLB_Scrape <- R6::R6Class(
           post_runner_3b_id = post_third,
           post_outs         = post_outs
         )
-    
+        
         pre_state <- post_state %>%
           dplyr::transmute(
             event_index,
@@ -255,35 +255,35 @@ MLB_Scrape <- R6::R6Class(
             pre_runner_3b_id = dplyr::lag(post_runner_3b_id, 1),
             pre_outs         = dplyr::lag(post_outs, 1, default = 0) %% 3
           )
-    
+        
         z_flag <- .ghost_flags(event_data)
         if (any(z_flag, na.rm = TRUE)) {
           z_ids <- .ghost_id_for_each_ab(event_data)
           pre_state$pre_runner_2b_id[z_flag] <- z_ids[z_flag]
         }
-    
+        
         dplyr::left_join(pre_state, post_state, by = "event_index") %>%
           dplyr::select(event_index, dplyr::starts_with("pre_"), dplyr::starts_with("post_"))
       }
-    
+      
       swing_codes <- c("X","F","S","D","E","T","W")
       whiff_codes <- c("S","T","W")
       csw_codes   <- c("S","T","W","C")
-    
+      
       out_rows <- vector("list", 0L)
-    
+      
       for (g in data_list) {
         if (!is.list(g) || !is.null(g$error)) next
-    
+        
         at_bats <- g$liveData$plays$allPlays
         if (is.null(at_bats) || NROW(at_bats) == 0L) { pb$tick(); next }
-    
+        
         bos_evt <- track_base_out_by_event(at_bats)
         bos_idx <- if (nrow(bos_evt)) setNames(seq_len(nrow(bos_evt)), bos_evt$event_index) else integer()
-    
+        
         home <- g$gameData$teams$home
         away <- g$gameData$teams$away
-    
+        
         home_team         <- home$name %||% home$abbreviation %||% NA
         home_level_id     <- (home$sport$id %||% home$league$id) %||% NA_integer_
         home_level_name   <- (home$sport$name %||% home$league$name) %||% NA_character_
@@ -291,7 +291,7 @@ MLB_Scrape <- R6::R6Class(
         home_parentorg_nm <- (home$parentOrgName %||% home$parentOrg$name) %||% NA_character_
         home_league_id    <- home$league$id %||% NA_integer_
         home_league_name  <- home$league$name %||% NA_character_
-    
+        
         away_team         <- away$name %||% away$abbreviation %||% NA
         away_level_id     <- (away$sport$id %||% away$league$id) %||% NA_integer_
         away_level_name   <- (away$sport$name %||% away$league$name) %||% NA_character_
@@ -299,7 +299,7 @@ MLB_Scrape <- R6::R6Class(
         away_parentorg_nm <- (away$parentOrgName %||% away$parentOrg$name) %||% NA_character_
         away_league_id    <- away$league$id %||% NA_integer_
         away_league_name  <- away$league$name %||% NA_character_
-    
+        
         players_list <- g$gameData$players %||% list()
         id_to_name <- function(id) {
           if (is.na(id)) return(NA_character_)
@@ -309,37 +309,37 @@ MLB_Scrape <- R6::R6Class(
           nm <- pl$fullName %||% NA_character_
           if (is.null(nm)) NA_character_ else nm
         }
-    
+        
         
         for (i in seq_len(NROW(at_bats))) {
           ab <- at_bats[i, , drop = FALSE]
-    
+          
           pidx0 <- ab$pitchIndex[[1]]
           if (is.null(pidx0) || !length(pidx0)) next
-    
+          
           evs <- ab$playEvents[[1]]
           if (is.null(evs) || NROW(evs) == 0L) next
-    
+          
           pidx <- as.integer(pidx0) + 1L
           pidx <- pidx[pidx >= 1L & pidx <= NROW(evs)]
           if (!length(pidx)) next
-    
+          
           is_top <- if ("about.isTopInning" %in% names(ab)) ab$`about.isTopInning` else ab$about[[1]]$isTopInning
           batting_team  <- if (isTRUE(is_top)) away$abbreviation %||% NA else home$abbreviation %||% NA
           fielding_team <- if (isTRUE(is_top)) home$abbreviation %||% NA else away$abbreviation %||% NA
-    
+          
           ei <- if ("atBatIndex" %in% names(ab)) ab$atBatIndex else ab$about[[1]]$atBatIndex
           boe <- if (length(bos_idx)) bos_evt[ bos_idx[[as.character(ei)]] , ] else NULL
-    
+          
           for (j in seq_along(pidx)) {
             k <- pidx[j]
             row_e <- evs[k, , drop = FALSE]
             last_pitch <- j == length(pidx)
-    
+            
             sA <- .gv(row_e, "count.strikes", c("count","strikes"))
             bA <- .gv(row_e, "count.balls",   c("count","balls"))
             oA <- .gv(row_e, "count.outs",    c("count","outs"))
-    
+            
             if (k > 1L) {
               prev <- evs[k-1L, , drop = FALSE]
               sB <- .gv(prev, "count.strikes", c("count","strikes"))
@@ -348,54 +348,54 @@ MLB_Scrape <- R6::R6Class(
             } else {
               sB <- 0L; bB <- 0L; oB <- oA
             }
-    
+            
             code <- .gv(row_e, "details.code", c("details","code"))
             is_pitch_val <- isTRUE(.gv(row_e, "isPitch", "isPitch"))
             code_val <- if (is.null(code) || length(code) == 0) NA_character_ else as.character(code)
-    
+            
             is_swing <- if (is_pitch_val) {
               if (!is.na(code_val)) as.integer(code_val %in% swing_codes) else NA_integer_
             } else NA_integer_
-    
+            
             is_csw <- if (is_pitch_val) {
               if (!is.na(code_val)) as.integer(code_val %in% csw_codes) else NA_integer_
             } else NA_integer_
-    
+            
             is_whiff <- if (is_pitch_val && !is.na(code_val) && (code_val %in% swing_codes)) {
               as.integer(code_val %in% whiff_codes)
             } else NA_integer_
-    
+            
             pitch_zone <- suppressWarnings(
               as.integer(.gv(row_e, "pitchData.zone", c("pitchData","zone")))
             )
-    
+            
             in_zone <- if (is_pitch_val && !is.na(pitch_zone)) {
               if (pitch_zone < 10L) 1L else 0L
             } else NA_integer_
-    
+            
             is_chase <- if (is_pitch_val && is_swing == 1L) {
               if (is.na(in_zone)) NA_integer_ else if (in_zone == 0L) 1L else 0L
             } else NA_integer_
-    
+            
             in_zone_whiff <- if (is_pitch_val && is_swing == 1L && !is.na(in_zone) && in_zone == 1L) {
               if (is_whiff == 1L) 1L else 0L
             } else NA_integer_
-    
+            
             in_play_flag <- isTRUE(.gv(row_e, "details.isInPlay", c("details","isInPlay")))
             ev  <- suppressWarnings(as.numeric(.gv(row_e, "hitData.launchSpeed", c("hitData","launchSpeed"))))
             ang <- suppressWarnings(as.numeric(.gv(row_e, "hitData.launchAngle",  c("hitData","launchAngle"))))
             in_play <- if (is_pitch_val) as.integer(in_play_flag) else NA_integer_
-    
+            
             is_barrel <- if (in_play_flag) {
               if (!is.na(ev) && !is.na(ang)) {
                 as.integer((ev * 1.5 - ang) >= 117 && (ev + ang) >= 124 && ang <= 50 && ev >= 98)
               } else NA_integer_
             } else NA_integer_
-    
+            
             is_hard_hit <- if (in_play_flag) {
               if (!is.na(ev) && !is.na(ang)) as.integer(ev >= 95) else NA_integer_
             } else NA_integer_
-    
+            
             if (i > 1L) {
               prev_ab <- at_bats[i - 1L, , drop = FALSE]
               pre_away_score_val <- suppressWarnings(as.integer(
@@ -418,7 +418,7 @@ MLB_Scrape <- R6::R6Class(
               pre_away_score_val <- 0L
               pre_home_score_val <- 0L
             }
-    
+            
             if (!is.null(boe) && nrow(boe) == 1) {
               pre1_id  <- boe$pre_runner_1b_id
               pre2_id  <- boe$pre_runner_2b_id
@@ -432,7 +432,7 @@ MLB_Scrape <- R6::R6Class(
               pre1_id <- pre2_id <- pre3_id <- post1_id <- post2_id <- post3_id <- NA_integer_
               pre_outs_val <- post_outs_val <- NA_integer_
             }
-    
+            
             r <- list(
               game_id    = g$gamePk %||% NA,
               game_date  = g$gameData$datetime$officialDate %||% NA,
@@ -544,16 +544,16 @@ MLB_Scrape <- R6::R6Class(
               batting_team  = batting_team,
               fielding_team = fielding_team
             )
-    
+            
             out_rows[[length(out_rows) + 1L]] <- r
           }
         }
-    
+        
         pb$tick()
       }
-    
+      
       if (!length(out_rows)) return(tibble::tibble())
-    
+      
       data.table::rbindlist(out_rows, use.names = TRUE, fill = TRUE) %>%
         tibble::as_tibble()
     },
@@ -607,12 +607,12 @@ MLB_Scrape <- R6::R6Class(
         distinct(sport_id, Season, player_id, .keep_all = TRUE)
     }, 
     get_player_games_list = function(player_id,
-                                      season = c(2025),
-                                      start_date = NULL,
-                                      end_date   = NULL,
-                                      game_type  = c("R"),
-                                      sport_id   = 1) {
-  
+                                     season = c(2025),
+                                     start_date = NULL,
+                                     end_date   = NULL,
+                                     game_type  = c("R"),
+                                     sport_id   = 1) {
+      
       `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
       .is_date <- function(x) grepl("^\\d{4}-\\d{2}-\\d{2}$", x)
       
@@ -668,6 +668,56 @@ MLB_Scrape <- R6::R6Class(
         distinct() %>%
         filter(!is.na(team_id)) %>%
         arrange(team_id)
+      
+    }, 
+    get_pbp_season = function(season = c(2025), 
+                              start_date = NULL, 
+                              end_date = NULL,
+                              sport_id = c(1), 
+                              game_type = c('R')){
+      
+      schedule <- self$get_schedule(
+        season    = season,
+        sport_id  = sport_id,
+        game_type = game_type
+      )  %>% 
+        filter(state %in% c("F", "D", "I"))
+      
+      if (!is.null(start_date)) {
+        schedule <- schedule %>% dplyr::filter(date >= start_date)
+      }
+      if (!is.null(end_date)) {
+        schedule <- schedule %>% dplyr::filter(date <= end_date)
+      }
+      
+      ids_list <- schedule %>%
+                  distinct(game_id) %>% 
+                  pull(game_id)
+      
+      
+      if (length(ids_list) == 0) {
+        tibble()
+      }
+      self$get_pbp_data(data_list = self$get_data_json(ids_list = ids_list)) 
+    },
+    get_pbp_player = function(player_id, 
+                               season = c(2025), 
+                               start_date = NULL, 
+                               end_date = NULL,
+                               game_type = c('R'),
+                               sport_id = c(1)){
+      
+      ids_list <- self$get_player_games_list(player_id = player_id,
+                                               season = season,
+                                               start_date = NULL, 
+                                               end_date = NULL,
+                                               game_type = game_type,
+                                               sport_id = sport_id)
+      
+      
+      
+      self$get_pbp_data(data_list = self$get_data_json(ids_list = ids_list)) 
+      
       
     }
     
