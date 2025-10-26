@@ -2,7 +2,7 @@ library(R6)
 library(httr)
 library(jsonlite)
 library(tidyverse)
-library(magrittr)
+library(baseballr)
 library(data.table)
 library(progress)
 library(janitor)
@@ -12,7 +12,7 @@ MLB_Scrape <- R6::R6Class(
   
   public = list(
     
-    initialize = function() {
+    initialize = function(self) {
     },
     
     get_sport_id = function() {
@@ -20,17 +20,6 @@ MLB_Scrape <- R6::R6Class(
       data <- fromJSON(content(response, "text", encoding = "UTF-8"))
       
       as.data.frame(data$sports)
-    },
-    
-    get_sport_id_check = function(sport_id = 1) {
-      sport_id_df <- self$get_sport_id()
-      
-      if (!(sport_id %in% sport_id_df$id)) {
-        print("Please Select a New Sport ID from the following:")
-        print(sport_id_df)
-        FALSE
-      }
-      TRUE
     },
     
     get_game_types = function() {
@@ -51,19 +40,19 @@ MLB_Scrape <- R6::R6Class(
         stop("game_type must be a vector of strings.")
       }
       
-      season_str <- paste(season, collapse = ",")
+      year_input_str <- paste(season, collapse = ",")
       sport_id_str <- paste(sport_id, collapse = ",")
       game_type_str <- paste(game_type, collapse = ",")
       
       game_call <- GET(paste0("https://statsapi.mlb.com/api/v1/schedule/?sportId=", sport_id_str, 
-                        "&gameTypes=", game_type_str, "&season=", season_str, 
-                        "&hydrate=lineup,players"))
-
+                              "&gameTypes=", game_type_str, "&season=", year_input_str, 
+                              "&hydrate=lineup,players"))
+      
       game_call_data <- content(game_call, "text", encoding = "UTF-8")
       
       game_call_data_parsed <- fromJSON(game_call_data)
       
-
+      
       game_list <-  unlist(list(bind_rows(game_call_data_parsed$dates$games)$gamePk))
       time_list <- unlist(list(bind_rows(game_call_data_parsed$dates$games)$gameDate))
       date_list <-  unlist(list(bind_rows(game_call_data_parsed$dates$games)$officialDate))
@@ -72,8 +61,8 @@ MLB_Scrape <- R6::R6Class(
       state_list <- unlist(list(bind_rows(game_call_data_parsed$dates$games)$status$codedGameState))
       venue_id <-  unlist(list(bind_rows(game_call_data_parsed$dates$games)$venue$id))
       venue_name <- unlist(list(bind_rows(game_call_data_parsed$dates$games)$venue$name))
-
-
+      
+      
       game_df <- data.frame(game_id = game_list, 
                             time = time_list, 
                             date = date_list, 
@@ -95,24 +84,24 @@ MLB_Scrape <- R6::R6Class(
       
     },
     
-    get_data_json = function(game_list_input) {
-      data_total <- vector("list", length(game_list_input))
+    get_data_json = function(ids_list) {
+      data_total <- vector("list", length(ids_list))
       
       pb <- progress_bar$new(
         format = "Retrieving Data [:bar] :percent (:current/:total)",
-        total = length(game_list_input),
+        total = length(ids_list),
         clear = FALSE,
         width = 60
       )
       
-      for (i in seq_along(game_list_input)) {
-        url <- paste0("https://statsapi.mlb.com/api/v1.1/game/", game_list_input[i], "/feed/live")
+      for (i in seq_along(ids_list)) {
+        url <- paste0("https://statsapi.mlb.com/api/v1.1/game/", ids_list[i], "/feed/live")
         response <- GET(url)
         
         if (status_code(response) == 200) {
           data_total[[i]] <- fromJSON(content(response, "text"), flatten = TRUE)
         } else {
-          data_total[[i]] <- list(error = paste("Failed to fetch data for game", game_list_input[i]))
+          data_total[[i]] <- list(error = paste("Failed to fetch data for game", ids_list[i]))
         }
         
         pb$tick()
@@ -120,7 +109,7 @@ MLB_Scrape <- R6::R6Class(
       
       data_total
     }, 
-  get_pbp_data = function(data_list) {
+    get_pbp_data = function(data_list) {
 
      
       pb <- progress_bar$new(
@@ -258,7 +247,7 @@ MLB_Scrape <- R6::R6Class(
           post_outs         = post_outs
         )
     
-        pre_state <- post_state |>
+        pre_state <- post_state %>%
           dplyr::transmute(
             event_index,
             pre_runner_1b_id = dplyr::lag(post_runner_1b_id, 1),
@@ -273,7 +262,7 @@ MLB_Scrape <- R6::R6Class(
           pre_state$pre_runner_2b_id[z_flag] <- z_ids[z_flag]
         }
     
-        dplyr::left_join(pre_state, post_state, by = "event_index") |>
+        dplyr::left_join(pre_state, post_state, by = "event_index") %>%
           dplyr::select(event_index, dplyr::starts_with("pre_"), dplyr::starts_with("post_"))
       }
     
@@ -569,62 +558,108 @@ MLB_Scrape <- R6::R6Class(
     
       if (!length(out_rows)) return(tibble::tibble())
     
-      data.table::rbindlist(out_rows, use.names = TRUE, fill = TRUE) |>
+      data.table::rbindlist(out_rows, use.names = TRUE, fill = TRUE) %>%
         tibble::as_tibble()
     },
-    get_player_games_list = function(player_id, season, start_date = NULL, end_date = NULL, 
-                                     game_type = c('R') , sport_id = 1) {
-
-      if (is.null(start_date)) {
-        start_date <- paste0(season, "-01-01")
+    get_players = function(sport_id = c(1), season = c(2025)) {
+      
+      `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
+      
+      sport_ids <- as.integer(unlist(sport_id, use.names = FALSE))
+      seasons   <- as.integer(unlist(season,   use.names = FALSE))
+      combos <- expand.grid(sport_id = sport_ids, Season = seasons, KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
+      
+      rows <- vector("list", nrow(combos))
+      
+      for (i in seq_len(nrow(combos))) {
+        sp <- combos$sport_id[i]
+        se <- combos$Season[i]
+        
+        url <- sprintf("https://statsapi.mlb.com/api/v1/sports/%s/players?season=%s", sp, se)
+        resp <- tryCatch(httr::GET(url), error = function(e) NULL)
+        parsed <- tryCatch(httr::content(resp, "parsed", encoding = "UTF-8"), error = function(e) NULL)
+        
+        people <- if (!is.null(parsed) && !is.null(parsed$people)) parsed$people else list()
+        if (length(people) == 0) {
+          rows[[i]] <- tibble::tibble(
+            sport_id = integer(0), Season = integer(0), player_id = integer(0),
+            first_name = character(0), last_name = character(0), name = character(0),
+            position = character(0), team = integer(0), weight = integer(0),
+            height = character(0), age = integer(0), birthDate = character(0)
+          )
+          next
+        }
+        
+        n <- length(people)
+        rows[[i]] <- tibble::tibble(
+          sport_id   = rep(sp, n),
+          Season     = rep(se, n),
+          player_id  = vapply(people, function(p) p$id %||% NA_integer_, integer(1)),
+          first_name = vapply(people, function(p) p$firstName %||% NA_character_, character(1)),
+          last_name  = vapply(people, function(p) p$lastName %||% NA_character_, character(1)),
+          name       = vapply(people, function(p) p$fullName %||% NA_character_, character(1)),
+          position   = vapply(people, function(p) if (!is.null(p$primaryPosition)) p$primaryPosition$abbreviation %||% NA_character_ else NA_character_, character(1)),
+          team       = vapply(people, function(p) if (!is.null(p$currentTeam))     p$currentTeam$id %||% NA_integer_            else NA_integer_, integer(1)),
+          weight     = vapply(people, function(p) p$weight %||% NA_integer_, integer(1)),
+          height     = vapply(people, function(p) p$height %||% NA_character_, character(1)),
+          age        = vapply(people, function(p) p$currentAge %||% NA_integer_, integer(1)),
+          birthDate  = vapply(people, function(p) p$birthDate %||% NA_character_, character(1))
+        )
       }
       
-      if (is.null(end_date)) {
-        end_date <- paste0(season, "-12-31")
-      }
+      bind_rows(rows)  %>% 
+        distinct(sport_id, Season, player_id, .keep_all = TRUE)
+    }, 
+    get_player_games_list = function(player_id,
+                                      season = c(2025),
+                                      start_date = NULL,
+                                      end_date   = NULL,
+                                      game_type  = c("R"),
+                                      sport_id   = 1) {
+  
+      `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
+      .is_date <- function(x) grepl("^\\d{4}-\\d{2}-\\d{2}$", x)
       
-      if (!grepl("^\\d{4}-\\d{2}-\\d{2}$", start_date)) {
+      seasons <- as.character(unlist(season, use.names = FALSE))
+      if (!length(seasons)) stop("`season` must be a year or a vector/list of years.")
+      
+      if (!is.null(start_date) && !.is_date(start_date)) {
         stop(paste("start_date", start_date, "is not in YYYY-MM-DD format"))
       }
-      if (!grepl("^\\d{4}-\\d{2}-\\d{2}$", end_date)) {
+      if (!is.null(end_date) && !.is_date(end_date)) {
         stop(paste("end_date", end_date, "is not in YYYY-MM-DD format"))
       }
-    
-      game_type_str <- paste(game_type, collapse = ',')
-  
-      url <- paste0('http://statsapi.mlb.com/api/v1/people/', player_id, '?hydrate=stats(type=gameLog,season=', 
-                season, ',startDate=', start_date, ',endDate=', end_date, ',sportId=', sport_id, ',gameType=[', 
-                game_type_str, ']),hydrations')
-  
-      response <- content(GET(url), "parsed")
       
-      sapply(response$people[[1]]$stats[[1]]$splits, function(x) x$game$gamePk)
+      game_type_str <- paste(game_type, collapse = ",")
       
+      fetch_one <- function(yr) {
+        sd <- start_date %||% paste0(yr, "-01-01")
+        ed <- end_date   %||% paste0(yr, "-12-31")
+        
+        url <- paste0(
+          "https://statsapi.mlb.com/api/v1/people/", player_id,
+          "?hydrate=stats(type=gameLog,season=", yr,
+          ",startDate=", sd,
+          ",endDate=", ed,
+          ",sportId=", sport_id,
+          ",gameType=[", game_type_str, "]),hydrations"
+        )
+        
+        resp <- tryCatch(httr::content(httr::GET(url), "parsed"), error = function(e) NULL)
+        if (is.null(resp)) return(integer(0))
+        
+        splits <- tryCatch(resp$people[[1]]$stats[[1]]$splits, error = function(e) NULL)
+        if (is.null(splits) || length(splits) == 0) return(integer(0))
+        
+        as.integer(sapply(splits, function(x) x$game$gamePk))
+      }
+      pks <- unlist(lapply(seasons, fetch_one), use.names = FALSE)
+      unique(pks[!is.na(pks)])
     },
-    
-    get_players = function(sport_id, season) {
-
-      url <- paste0('https://statsapi.mlb.com/api/v1/sports/', sport_id, '/players?season=', season)
-      player_data <- content(GET(url), "parsed")
-      
-      tibble(
-        Season = season,
-        player_id = sapply(player_data$people, function(x) x$id),
-        first_name = sapply(player_data$people, function(x) x$firstName),
-        last_name = sapply(player_data$people, function(x) x$lastName),
-        name = sapply(player_data$people, function(x) x$fullName),
-        position = sapply(player_data$people, function(x) x$primaryPosition$abbreviation),
-        team = sapply(player_data$people, function(x) x$currentTeam$id),
-        weight = sapply(player_data$people, function(x) x$weight),
-        height = sapply(player_data$people, function(x) x$height),
-        age = sapply(player_data$people, function(x) x$currentAge),
-        birthDate = sapply(player_data$people, function(x) x$birthDate)
-      )
-    }, 
     get_teams = function() {
       response <- GET("https://statsapi.mlb.com/api/v1/teams/")
       teams <- content(response, "text") %>% fromJSON(flatten = TRUE)
-    
+      
       teams$teams %>%
         tibble::as_tibble() %>%
         transmute(
@@ -637,8 +672,10 @@ MLB_Scrape <- R6::R6Class(
         distinct() %>%
         filter(!is.na(team_id)) %>%
         arrange(team_id)
-    
+      
     }
     
   )
 )
+
+
