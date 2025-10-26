@@ -58,5 +58,26 @@ Use his Python version here https://github.com/tnestico/mlb_scraper
   - `sport_id` (int):  A list of sport ids to get the schedule from. Default: 1
 - **Returns**: List of game ids for the given player
 
+#### `get_pbp_season(season = c(2025), start_date = NULL, end_date = NULL, sport_id = c(1), game_type = c('R'))`
+- **Inputs**:
+  - `season` (int): A list of seasons to pull play-by-play from. Default: 2025
+  - `start_date` (chr): First date to include. yyyy-mm-dd format. Default: NULL
+  - `end_date` (chr): Last date to include. yyyy-mm-dd format. Default: NULL
+  - `sport_id` (int): A list of sport ids to include. Default: 1
+  - `game_type` (chr): A list of game types to include. Default: "R"
+- **Returns**: Dataframe with play-by-play for all matching games (filters schedule to states "F", "D", "I"; returns empty dataframe if no games)
+
+#### `get_pbp_player(player_id, season = c(2025), start_date = NULL, end_date = NULL, game_type = c('R'), sport_id = c(1), pitching = FALSE)`
+- **Inputs**:
+  - `player_id` (int): 6 digit MLBAM player id
+  - `season` (int): A list of seasons to search for the player's games. Default: 2025
+  - `start_date` (chr): First date to include. yyyy-mm-dd format. Default: NULL
+  - `end_date` (chr): Last date to include. yyyy-mm-dd format. Default: NULL
+  - `game_type` (chr): A list of game types to include. Default: "R"
+  - `sport_id` (int): A list of sport ids to include. Default: 1
+  - `pitching` (lgl): If TRUE, returns games the player pitched in; otherwise games the player appeared in. Default: FALSE
+- **Returns**: Dataframe with play-by-play from games involving the specified player that match the filters
+
+
 #### `get_teams()`
 - **Returns**: A dataframe with team information
