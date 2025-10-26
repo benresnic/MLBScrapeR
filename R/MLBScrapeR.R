@@ -378,7 +378,7 @@ MLB_Scrape <- R6::R6Class(
             } else NA_integer_
     
             in_zone_whiff <- if (is_pitch_val && is_swing == 1L && !is.na(in_zone) && in_zone == 1L) {
-              if (isTRUE(is_whiff)) 1L else 0L
+              if (is_whiff == 1L) 1L else 0L
             } else NA_integer_
     
             in_play_flag <- isTRUE(.gv(row_e, "details.isInPlay", c("details","isInPlay")))
