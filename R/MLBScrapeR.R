@@ -467,7 +467,6 @@ MLB_Scrape <- R6::R6Class(
               play_type     = .gv(row_e, "type", "type"),
               description   = .gv(row_e, "details.description", c("details","description")),
               pitch_code    = code,
-              pitch_call_code = .gv(row_e, "details.call.code",        c("details","call","code")),
               pitch_call    = .gv(row_e, "details.call.description",   c("details","call","description")),
               pitch_type    = .gv(row_e, "details.type.code",          c("details","type","code")),
               pitch_name    = .gv(row_e, "details.type.description",   c("details","type","description")),
