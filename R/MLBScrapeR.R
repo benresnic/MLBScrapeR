@@ -785,24 +785,25 @@ MLB_Scrape <- R6::R6Class(
       }
 
     },
-    get_guts = function(seasons = NULL) {
+    get_guts <- function(seasons = NULL) {
       url <- "https://www.fangraphs.com/tools/guts"
-      resp <- request(url) %>%
-        req_user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118 Safari/537.36") %>%
-        req_perform()
-
-      page <- resp_body_html(resp)
+      resp <- httr2::request(url) %>%
+        httr2::req_user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118 Safari/537.36") %>%
+        httr2::req_perform()
+      
+      page <- httr2::resp_body_html(resp)
+      
       tables <- page %>%
-        html_elements("table") %>%
-        lapply(html_table)
-
+        rvest::html_elements("table") %>%
+        lapply(rvest::html_table)
+      
       result <- tables[[which.max(sapply(tables, nrow))]]
-
+      
       if (!is.null(seasons)) {
-        result <- result %>% filter(Season %in% seasons)
+        result <- result %>% dplyr::filter(Season %in% seasons)
       }
-      result
-
+      
+      return(result)
     },
     apply_wOBA = function(df){
 
@@ -847,14 +848,14 @@ MLB_Scrape <- R6::R6Class(
         ) %>%
         left_join(re288, by = c("outs","count","base_state")) %>%
         dplyr::group_by(half) %>%
-        arrange(ab_number, pitch_number) %>%
+        dplyr::arrange(ab_number, pitch_number) %>%
         dplyr::mutate(runs_on_play = ifelse(!is.na(lead(ab_number)),
                                      lead(batting_score) - batting_score,
                                      0),
                delta_run_exp = ifelse(!is.na(lead(ab_number)),
                                       lead(run_expectancy) - run_expectancy + runs_on_play,
                                       -run_expectancy)) %>%
-        ungroup() %>%
+        dplyr::ungroup() %>%
         dplyr::select(-c(half, batting_score, count))
     }
 
