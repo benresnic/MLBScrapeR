@@ -713,7 +713,6 @@ MLB_Scrape <- R6::R6Class(
     },
     get_run_expectancy = function(df, matrix_type = c(24, 288)) {
 
-      df <- df %>% dplyr::filter(is_pitch == TRUE)
 
 
       df <- df %>%
