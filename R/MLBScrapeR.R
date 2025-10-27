@@ -785,7 +785,7 @@ MLB_Scrape <- R6::R6Class(
       }
 
     },
-    get_guts <- function(seasons = NULL) {
+    get_guts = function(seasons = NULL) {
       url <- "https://www.fangraphs.com/tools/guts"
       resp <- httr2::request(url) %>%
         httr2::req_user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118 Safari/537.36") %>%
