@@ -735,6 +735,9 @@ MLB_Scrape <- R6::R6Class(
           base_state = paste0(as.integer(!is.na(pre_runner_1b_id)),
                               as.integer(!is.na(pre_runner_2b_id)),
                               as.integer(!is.na(pre_runner_3b_id))),
+          outs    = pmin(pmax(as.integer(outs),    0L), 2L),
+          balls   = pmin(pmax(as.integer(balls),   0L), 3L),
+          strikes = pmin(pmax(as.integer(strikes), 0L), 2L),
           count   = paste0(balls, "-", strikes)
         )
 
@@ -828,6 +831,9 @@ MLB_Scrape <- R6::R6Class(
           base_state = paste0(as.integer(!is.na(pre_runner_1b_id)),
                               as.integer(!is.na(pre_runner_2b_id)),
                               as.integer(!is.na(pre_runner_3b_id))),
+          outs    = pmin(pmax(as.integer(outs),    0L), 2L),
+          balls   = pmin(pmax(as.integer(balls),   0L), 3L),
+          strikes = pmin(pmax(as.integer(strikes), 0L), 2L),
           count   = paste0(balls, "-", strikes)
         ) %>%
         dplyr::left_join(re288, by = c("outs","count","base_state")) %>%
