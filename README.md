@@ -106,17 +106,34 @@ devtools::install_github("benresnic/MLBScrapeR", force = TRUE) #Run once
 library(MLBScrapeR) #Load in the library
 
 #PBP data for Mookie Betts in the World Seried for 2024 & 2025
-data <- MLBScrapeR::get_pbp_player(player_id = 605141, #Mookie Betts
+Mookie_data <- MLBScrapeR::get_pbp_player(player_id = 605141, #Mookie Betts
                                    season = 2024:2025, #2024 & 2025
                                    start_date = NULL, 
                                    end_date = NULL,
                                    game_type = "W", #World Series
                                    sport_id = 1) #Sport ID 1: MLB
           
-#PBP data for the 2025 Division Series
+#PBP data for the 2025 Regular Season
 data <- MLBScrapeR::get_pbp_season(season = 2025, #2025 season
                                    start_date = NULL,
                                    end_date = NULL,
                                    sport_id = c(1),# Sport ID 1: MLB
-                                   game_type = c('D')) #Division Series
+                                   game_type = c('R')) #Regular Season
+
+#Get RE24 Matrix
+re24 <- MLBScrapeR::get_run_expectancy(data, 24)
+
+#Get RE288 Matrix
+re288 <- MLBScrapeR::get_run_expectancy(data, 288)
+
+#Get GUTS table from Fangraphs for 2020 through 2025
+guts <- MLBScrapeR::get_guts(2020:2025)
+
+#Apply run values to the data
+data <- MLBScrapeR::apply_re288(data)
+
+#Apply wOBA values to the data
+data <- MLBScrapeR::apply_wOBA(data)
+
+
 ```
