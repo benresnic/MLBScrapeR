@@ -1,4 +1,5 @@
 library(R6)
+library(dplyr)
 library(httr)
 library(jsonlite)
 library(data.table)
