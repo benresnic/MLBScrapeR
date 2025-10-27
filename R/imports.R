@@ -1,13 +1,16 @@
 # R/imports.R
-
 #' @keywords internal
-#' @import tidyverse
-#' @import httr
-#' @import jsonlite
-#' @import tibble
+#' @import data.table
 #' @import dplyr
+#' @import httr
+#' @import httr2
+#' @import janitor
+#' @import jsonlite
+#' @import lubridate
 #' @import magrittr
 #' @import progress
-#' @import lubridate
-#' @import data.table
+#' @import purrr
+#' @import R6
+#' @import rvest
+#' @import tibble
 NULL
