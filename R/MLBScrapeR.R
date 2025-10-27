@@ -805,7 +805,7 @@ MLB_Scrape <- R6::R6Class(
                     dplyr::select(c(Season, w1B, w2B, w3B, wHR, wHBP, wBB)),
                   by = c("year" = "Season")) %>%
         dplyr::mutate(
-          wOBA = case_when(
+          wOBA = dplyr::case_when(
             event_type == "single" ~ w1B,
             event_type == "double" ~ w2B,
             event_type == "triple" ~ w3B,
