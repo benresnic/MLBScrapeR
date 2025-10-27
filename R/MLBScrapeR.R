@@ -726,22 +726,22 @@ MLB_Scrape <- R6::R6Class(
 
 
       df <- df %>%
-        mutate(
+        dplyr::mutate(
           half = paste(game_id, inning, top_bottom, sep = "_"),
           away_score = suppressWarnings(as.numeric(away_score)),
           home_score = suppressWarnings(as.numeric(home_score))
         ) %>%
-        arrange(ab_number, pitch_number) %>%
-        group_by(half) %>%
+        dplyr::arrange(ab_number, pitch_number) %>%
+        dplyr::group_by(half) %>%
         tidyr::fill(away_score, home_score, .direction = "downup") %>%
-        mutate(
+        dplyr::mutate(
           is_top = grepl("top", tolower(first(top_bottom))),
           bat_runs = ifelse(is_top, away_score, home_score),
           end_runs = max(bat_runs, na.rm = TRUE),
           runs_to_end = end_runs - bat_runs
         ) %>%
-        ungroup() %>%
-        mutate(
+        dplyr::ungroup() %>%
+        dplyr::mutate(
           base_state = paste0(as.integer(!is.na(pre_runner_1b_id)),
                               as.integer(!is.na(pre_runner_2b_id)),
                               as.integer(!is.na(pre_runner_3b_id))),
@@ -758,20 +758,20 @@ MLB_Scrape <- R6::R6Class(
 
       if (matrix_type == 24){
         agg <- df %>%
-          group_by(outs, base_state) %>%
+          dplyr::group_by(outs, base_state) %>%
           summarise(run_expectancy = mean(runs_to_end, na.rm = TRUE), .groups = "drop")
 
         tidyr::expand_grid(
           outs = 0:2,
           base_state = base_levels) %>%
           left_join(agg, by = c("outs","base_state")) %>%
-          arrange(outs, base_state) %>%
-          mutate(run_expectancy = round(run_expectancy, 2)) %>%
+          dplyr::arrange(outs, base_state) %>%
+          dplyr::mutate(run_expectancy = round(run_expectancy, 2)) %>%
           arrange(-run_expectancy)
       } else {
 
         agg <- df %>%
-          group_by(outs, count, base_state) %>%
+          dplyr::group_by(outs, count, base_state) %>%
           summarise(run_expectancy = mean(runs_to_end, na.rm = TRUE), .groups = "drop")
 
         tidyr::expand_grid(
@@ -779,8 +779,8 @@ MLB_Scrape <- R6::R6Class(
           count = all_counts,
           base_state = base_levels) %>%
           left_join(agg, by = c("outs","count","base_state")) %>%
-          arrange(outs, count, base_state) %>%
-          mutate(run_expectancy = round(run_expectancy, 2)) %>%
+          dplyr::arrange(outs, count, base_state) %>%
+          dplyr::mutate(run_expectancy = round(run_expectancy, 2)) %>%
           arrange(-run_expectancy)
       }
 
