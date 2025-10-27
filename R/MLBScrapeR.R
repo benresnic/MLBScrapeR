@@ -836,7 +836,7 @@ MLB_Scrape <- R6::R6Class(
       df <- self$get_run_expectancy(df, 288)
 
       df %>%
-        mutate(
+        dplyr::mutate(
           half = paste(game_id, inning, top_bottom, sep = "_"),
           batting_score = ifelse(top_bottom == "top", away_score, home_score),
           base_state = paste0(as.integer(!is.na(pre_runner_1b_id)),
@@ -848,9 +848,9 @@ MLB_Scrape <- R6::R6Class(
           count   = paste0(balls, "-", strikes)
         ) %>%
         left_join(re288, by = c("outs","count","base_state")) %>%
-        group_by(half) %>%
+        dplyr::group_by(half) %>%
         arrange(ab_number, pitch_number) %>%
-        mutate(runs_on_play = ifelse(!is.na(lead(ab_number)),
+        dplyr::mutate(runs_on_play = ifelse(!is.na(lead(ab_number)),
                                      lead(batting_score) - batting_score,
                                      0),
                delta_run_exp = ifelse(!is.na(lead(ab_number)),
