@@ -833,7 +833,7 @@ MLB_Scrape <- R6::R6Class(
     },
     apply_re288 = function(df){
 
-      df <- self$get_run_expectancy(df, 288)
+      re288 <- self$get_run_expectancy(df, 288)
 
       df %>%
         dplyr::mutate(
