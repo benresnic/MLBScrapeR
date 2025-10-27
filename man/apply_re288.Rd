@@ -4,7 +4,7 @@
 \alias{apply_re288}
 \title{Apply delta run values}
 \usage{
-apply_re288(df)
+apply_re288(df, full_season_data)
 }
 \arguments{
 \item{df}{Dataframe}
