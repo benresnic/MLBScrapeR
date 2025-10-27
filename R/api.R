@@ -194,3 +194,14 @@ apply_wOBA <- function(df){
 
 }
 
+#' Apply delta run values
+#'
+#' @param df Dataframe
+#' @return Dataframe with run values
+#' @export
+apply_re288 <- function(df){
+  .get_client()$apply_re288(
+    df = df
+  )
+}
+
