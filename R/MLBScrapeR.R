@@ -820,9 +820,9 @@ MLB_Scrape <- R6::R6Class(
         dplyr::select(-c(w1B, w2B, w3B, wHR, wHBP, wBB, year))
 
     },
-    apply_re288 = function(df){
+    apply_re288 = function(df, full_season_data){
 
-      re288 <- self$get_run_expectancy(df, 288)
+      re288 <- self$get_run_expectancy(full_season_data, 288)
 
       df %>%
         dplyr::mutate(
