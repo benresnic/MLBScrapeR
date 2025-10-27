@@ -713,7 +713,7 @@ MLB_Scrape <- R6::R6Class(
     },
     get_run_expectancy = function(df, matrix_type = c(24, 288)) {
 
-      df <- df %>% filter(is_pitch == TRUE)
+      df <- df %>% dplyr::filter(is_pitch == TRUE)
 
 
       df <- df %>%
@@ -726,7 +726,7 @@ MLB_Scrape <- R6::R6Class(
         dplyr::group_by(half) %>%
         tidyr::fill(away_score, home_score, .direction = "downup") %>%
         dplyr::mutate(
-          is_top = grepl("top", tolower(first(top_bottom))),
+          is_top = grepl("top", tolower(dplyr::first(top_bottom))),
           bat_runs = ifelse(is_top, away_score, home_score),
           end_runs = max(bat_runs, na.rm = TRUE),
           runs_to_end = end_runs - bat_runs
