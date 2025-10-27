@@ -199,9 +199,9 @@ apply_wOBA <- function(df){
 #' @param df Dataframe
 #' @return Dataframe with run values
 #' @export
-apply_re288 <- function(df){
+apply_re288 <- function(df, full_season_data){
   .get_client()$apply_re288(
-    df = df
+    df = df,
+    full_season_data = full_season_data
   )
 }
-
