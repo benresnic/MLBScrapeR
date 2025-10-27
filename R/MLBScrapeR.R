@@ -830,6 +830,34 @@ MLB_Scrape <- R6::R6Class(
         ) %>%
         dplyr::select(-c(w1B, w2B, w3B, wHR, wHBP, wBB, year))
 
+    },
+    apply_re288 = function(df){
+
+      df <- self$get_run_expectancy(df, 288)
+
+      df %>%
+        mutate(
+          half = paste(game_id, inning, top_bottom, sep = "_"),
+          batting_score = ifelse(top_bottom == "top", away_score, home_score),
+          base_state = paste0(as.integer(!is.na(pre_runner_1b_id)),
+                              as.integer(!is.na(pre_runner_2b_id)),
+                              as.integer(!is.na(pre_runner_3b_id))),
+          outs    = pmin(pmax(as.integer(outs),    0L), 2L),
+          balls   = pmin(pmax(as.integer(balls),   0L), 3L),
+          strikes = pmin(pmax(as.integer(strikes), 0L), 2L),
+          count   = paste0(balls, "-", strikes)
+        ) %>%
+        left_join(re288, by = c("outs","count","base_state")) %>%
+        group_by(half) %>%
+        arrange(ab_number, pitch_number) %>%
+        mutate(runs_on_play = ifelse(!is.na(lead(ab_number)),
+                                     lead(batting_score) - batting_score,
+                                     0),
+               delta_run_exp = ifelse(!is.na(lead(ab_number)),
+                                      lead(run_expectancy) - run_expectancy + runs_on_play,
+                                      -run_expectancy)) %>%
+        ungroup() %>%
+        dplyr::select(-c(half, batting_score, count))
     }
 
   )
