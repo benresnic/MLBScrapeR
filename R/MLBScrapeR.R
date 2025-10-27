@@ -844,7 +844,8 @@ MLB_Scrape <- R6::R6Class(
           strikes = pmin(pmax(as.integer(strikes), 0L), 2L),
           count   = paste0(balls, "-", strikes),
       
-          runs_on_play_text = str_count(play_description %||% "", regex("\\bscores\\b", ignore_case = TRUE))
+          runs_on_play_text = str_count(play_description %||% "", regex("\\bscores\\b", ignore_case = TRUE)) + 
+                    str_count(play_description %||% "", regex("\\bhomers\\b", ignore_case = TRUE))
         ) %>%
         dplyr::group_by(game_id) %>%
         dplyr::arrange(ab_number, pitch_number, .by_group = TRUE) %>%
@@ -860,7 +861,7 @@ MLB_Scrape <- R6::R6Class(
           runs_on_play_norm = dplyr::coalesce(lead(batting_score) - batting_score, 0),
       
          
-          is_walkoff = is_game_last_play & (batting_score + runs_on_play_text > fielding_score),
+           is_walkoff = is_game_last_play & (home_score + runs_on_play_text > away_score),
       
           next_base_state_walk = paste0(as.integer(!is.na(post_runner_1b_id)),
                                         as.integer(!is.na(post_runner_2b_id)),
