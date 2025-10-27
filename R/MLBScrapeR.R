@@ -824,30 +824,68 @@ MLB_Scrape <- R6::R6Class(
 
       re288 <- self$get_run_expectancy(full_season_data, 288)
 
-      df %>%
+      re_map <- re288 %>%
+        dplyr::mutate(key = paste(outs, count, base_state, sep = "|")) %>%
+        dplyr::select(key, run_expectancy)
+      
+      
+      re_lookup <- setNames(re_map$run_expectancy, re_map$key)
+      
+      data %>%
         dplyr::mutate(
           half = paste(game_id, inning, top_bottom, sep = "_"),
-          batting_score = ifelse(top_bottom == "top", away_score, home_score),
+          batting_score  = ifelse(top_bottom == "top", away_score, home_score),
+          fielding_score = ifelse(top_bottom == "top", home_score, away_score),
           base_state = paste0(as.integer(!is.na(pre_runner_1b_id)),
                               as.integer(!is.na(pre_runner_2b_id)),
                               as.integer(!is.na(pre_runner_3b_id))),
           outs    = pmin(pmax(as.integer(outs),    0L), 2L),
           balls   = pmin(pmax(as.integer(balls),   0L), 3L),
           strikes = pmin(pmax(as.integer(strikes), 0L), 2L),
-          count   = paste0(balls, "-", strikes)
+          count   = paste0(balls, "-", strikes),
+      
+          runs_on_play_text = str_count(play_description %||% "", regex("\\bscores\\b", ignore_case = TRUE))
         ) %>%
+        dplyr::group_by(game_id) %>%
+        dplyr::arrange(ab_number, pitch_number, .by_group = TRUE) %>%
+        dplyr::mutate(
+          is_game_last_play = dplyr::row_number() == dplyr::n()
+        ) %>%
+        dplyr::ungroup() %>%
         dplyr::left_join(re288, by = c("outs","count","base_state")) %>%
         dplyr::group_by(half) %>%
-        dplyr::arrange(ab_number, pitch_number) %>%
-        dplyr::mutate(runs_on_play = ifelse(!is.na(dplyr::lead(ab_number)),
-                                     dplyr::lead(batting_score) - batting_score,
-                                     0),
-               delta_run_exp = ifelse(!is.na(dplyr::lead(ab_number)),
-                                      dplyr::lead(run_expectancy) - run_expectancy + runs_on_play,
-                                      -run_expectancy)) %>%
+        dplyr::arrange(ab_number, pitch_number, .by_group = TRUE) %>%
+        dplyr::mutate(
+         
+          runs_on_play_norm = dplyr::coalesce(lead(batting_score) - batting_score, 0),
+      
+         
+          is_walkoff = is_game_last_play & (batting_score + runs_on_play_text > fielding_score),
+      
+          next_base_state_walk = paste0(as.integer(!is.na(post_runner_1b_id)),
+                                        as.integer(!is.na(post_runner_2b_id)),
+                                        as.integer(!is.na(post_runner_3b_id))),
+          next_count_walk      = "0-0",
+          next_outs_walk       = outs,
+      
+          RE_next_walk = re_lookup[paste(next_outs_walk, next_count_walk, next_base_state_walk, sep = "|")],
+      
+          RE_next_norm = ifelse(!is.na(lead(ab_number)), lead(run_expectancy), 0),
+      
+          RE_next = ifelse(is_walkoff, dplyr::coalesce(RE_next_walk, 0), RE_next_norm),
+          runs_on_play = ifelse(is_walkoff, runs_on_play_text, runs_on_play_norm),
+      
+          delta_run_exp = RE_next - run_expectancy + runs_on_play
+        ) %>%
         dplyr::ungroup() %>%
-        dplyr::select(-c(half, batting_score, count))
-    }
+        dplyr::select(-c(
+          half, count,
+          runs_on_play_norm, runs_on_play_text,
+          is_game_last_play, is_walkoff,
+          next_base_state_walk, next_count_walk, next_outs_walk,
+          RE_next_walk, RE_next_norm, RE_next
+        ))
+}
 
   )
 )
