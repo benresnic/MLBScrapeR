@@ -1,8 +1,6 @@
 library(R6)
 library(httr)
 library(jsonlite)
-library(tidyverse)
-library(baseballr)
 library(data.table)
 library(progress)
 library(janitor)
