@@ -130,7 +130,7 @@ re288 <- MLBScrapeR::get_run_expectancy(data, 288)
 guts <- MLBScrapeR::get_guts(2020:2025)
 
 #Apply run values to the data
-data <- MLBScrapeR::apply_re288(data)
+data <- MLBScrapeR::apply_re288(data, full_season_data)
 
 #Apply wOBA values to the data
 data <- MLBScrapeR::apply_wOBA(data)
