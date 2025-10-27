@@ -752,7 +752,7 @@ MLB_Scrape <- R6::R6Class(
         tidyr::expand_grid(
           outs = 0:2,
           base_state = base_levels) %>%
-          left_join(agg, by = c("outs","base_state")) %>%
+          dplyr::left_join(agg, by = c("outs","base_state")) %>%
           dplyr::arrange(outs, base_state) %>%
           dplyr::mutate(run_expectancy = round(run_expectancy, 2)) %>%
           dplyr::arrange(-run_expectancy)
@@ -766,7 +766,7 @@ MLB_Scrape <- R6::R6Class(
           outs = 0:2,
           count = all_counts,
           base_state = base_levels) %>%
-          left_join(agg, by = c("outs","count","base_state")) %>%
+          dplyr::left_join(agg, by = c("outs","count","base_state")) %>%
           dplyr::arrange(outs, count, base_state) %>%
           dplyr::mutate(run_expectancy = round(run_expectancy, 2)) %>%
           dplyr::arrange(-run_expectancy)
@@ -799,7 +799,7 @@ MLB_Scrape <- R6::R6Class(
 
       df %>%
         dplyr::mutate(year = lubridate::year(game_date)) %>%
-        left_join(guts %>%
+        dplyr::left_join(guts %>%
                     dplyr::select(c(Season, w1B, w2B, w3B, wHR, wHBP, wBB)),
                   by = c("year" = "Season")) %>%
         dplyr::mutate(
@@ -831,7 +831,7 @@ MLB_Scrape <- R6::R6Class(
                               as.integer(!is.na(pre_runner_3b_id))),
           count   = paste0(balls, "-", strikes)
         ) %>%
-        left_join(re288, by = c("outs","count","base_state")) %>%
+        dplyr::left_join(re288, by = c("outs","count","base_state")) %>%
         dplyr::group_by(half) %>%
         dplyr::arrange(ab_number, pitch_number) %>%
         dplyr::mutate(runs_on_play = ifelse(!is.na(lead(ab_number)),
