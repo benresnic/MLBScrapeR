@@ -107,45 +107,90 @@ get_player_games_list <- function(player_id,
   )
 }
 
-#' Get play-by-play for a set of seasons (optionally date-bounded)
+#' Get pbp data for a season
 #'
-#' @param season Integer vector of seasons, e.g. 2025 or c(2024, 2025).
-#' @param start_date,end_date Optional "YYYY-MM-DD" bounds.
-#' @param sport_id Integer vector, default 1 (MLB).
-#' @param game_type Character vector, default "R".
-#' @return A tibble of PBP rows for the selected games.
+#' @param season Integer vector of years.
+#' @param start_date,end_date Optional YYYY-MM-DD strings.
+#' @param sport_id Integer.
+#' @param game_type Character vector (e.g., "R").
+#' @return PBP data for a season
 #' @export
 get_pbp_season <- function(season = c(2025),
                            start_date = NULL,
                            end_date = NULL,
                            sport_id = c(1),
-                           game_type = c("R")) {
+                           game_type = c('R')){
   .get_client()$get_pbp_season(
-    season = season, start_date = start_date, end_date = end_date,
-    sport_id = sport_id, game_type = game_type
+    season = season,
+    start_date = start_date,
+    end_date = end_date,
+    sport_id = sport_id,
+    game_type = game_type
   )
 }
 
-#' Get play-by-play for games a player appeared in
+#' Get pbp data for a player
 #'
-#' @param player_id Six-digit MLBAM player id.
-#' @param season Integer season (or vector).
-#' @param start_date,end_date Optional "YYYY-MM-DD".
-#' @param sport_id Integer, default 1.
-#' @param game_type Character, default "R".
-#' @param pitching Logical; if TRUE, fetch games pitched (passed through to helper).
-#' @return A tibble of PBP rows from the player's games.
+#' @param player_id Integer MLBAM ID.
+#' @param season Integer vector of years.
+#' @param start_date,end_date Optional YYYY-MM-DD strings.
+#' @param game_type Character vector (e.g., "R").
+#' @param sport_id Integer.
+#' @return PBP data for a player
 #' @export
 get_pbp_player <- function(player_id,
-                           season = c(2025),
-                           start_date = NULL,
-                           end_date = NULL,
-                           game_type = c("R"),
-                           sport_id = c(1)) {
+                          season = c(2025),
+                          start_date = NULL,
+                          end_date = NULL,
+                          game_type = c('R'),
+                          sport_id = c(1)){
   .get_client()$get_pbp_player(
-    player_id = player_id, season = season,
-    start_date = start_date, end_date = end_date,
-    game_type = game_type, sport_id = sport_id
+    player_id = player_id,
+    season = season,
+    start_date = start_date,
+    end_date = end_date,
+    game_type = game_type,
+    sport_id = sport_id
   )
+
+}
+
+#' Get run expectancy matrix
+#'
+#' @param df Dataframe
+#' @param matrix_type Integer either the re24 or re288 matrix
+#' @return run expectancy matrix
+#' @export
+get_run_expectancy <- function(df,
+                               matrix_type = c(24, 288)){
+  .get_client()$get_run_expectancy(
+    df = df,
+    matrix_type = matrix_type
+  )
+
+}
+
+#' Get Fagraphs GUTS
+#'
+#' @param seasons Integer vector of years.
+#' @return Fagraphs GUTS
+#' @export
+get_guts <- function(seasons = NULL){
+  .get_client()$get_guts(
+    seasons = seasons
+  )
+
+}
+
+#' Apply wOBA values
+#'
+#' @param df Dataframe
+#' @return Dataframe with wOBA values
+#' @export
+apply_wOBA <- function(df){
+  .get_client()$apply_wOBA(
+    df = df
+  )
+
 }
 
