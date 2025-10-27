@@ -1,13 +1,3 @@
-library(R6)
-library(dplyr)
-library(httr)
-library(jsonlite)
-library(data.table)
-library(progress)
-library(janitor)
-library(rvest)
-library(httr2)
-
 MLB_Scrape <- R6::R6Class(
   "MLB_Scrape",
 
