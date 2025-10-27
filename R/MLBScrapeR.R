@@ -803,7 +803,7 @@ MLB_Scrape <- R6::R6Class(
         result <- result %>% dplyr::filter(Season %in% seasons)
       }
       
-      return(result)
+      result
     },
     apply_wOBA = function(df){
 
