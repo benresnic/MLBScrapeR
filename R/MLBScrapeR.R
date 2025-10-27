@@ -834,11 +834,11 @@ MLB_Scrape <- R6::R6Class(
         dplyr::left_join(re288, by = c("outs","count","base_state")) %>%
         dplyr::group_by(half) %>%
         dplyr::arrange(ab_number, pitch_number) %>%
-        dplyr::mutate(runs_on_play = ifelse(!is.na(lead(ab_number)),
-                                     lead(batting_score) - batting_score,
+        dplyr::mutate(runs_on_play = ifelse(!is.na(dplyr::lead(ab_number)),
+                                     dplyr::lead(batting_score) - batting_score,
                                      0),
-               delta_run_exp = ifelse(!is.na(lead(ab_number)),
-                                      lead(run_expectancy) - run_expectancy + runs_on_play,
+               delta_run_exp = ifelse(!is.na(dplyr::lead(ab_number)),
+                                      dplyr::lead(run_expectancy) - run_expectancy + runs_on_play,
                                       -run_expectancy)) %>%
         dplyr::ungroup() %>%
         dplyr::select(-c(half, batting_score, count))
