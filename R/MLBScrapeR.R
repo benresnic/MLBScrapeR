@@ -747,7 +747,7 @@ MLB_Scrape <- R6::R6Class(
       if (matrix_type == 24){
         agg <- df %>%
           dplyr::group_by(outs, base_state) %>%
-          summarise(run_expectancy = mean(runs_to_end, na.rm = TRUE), .groups = "drop")
+          dplyr::summarise(run_expectancy = mean(runs_to_end, na.rm = TRUE), .groups = "drop")
 
         tidyr::expand_grid(
           outs = 0:2,
@@ -755,12 +755,12 @@ MLB_Scrape <- R6::R6Class(
           left_join(agg, by = c("outs","base_state")) %>%
           dplyr::arrange(outs, base_state) %>%
           dplyr::mutate(run_expectancy = round(run_expectancy, 2)) %>%
-          arrange(-run_expectancy)
+          dplyr::arrange(-run_expectancy)
       } else {
 
         agg <- df %>%
           dplyr::group_by(outs, count, base_state) %>%
-          summarise(run_expectancy = mean(runs_to_end, na.rm = TRUE), .groups = "drop")
+          dplyr::summarise(run_expectancy = mean(runs_to_end, na.rm = TRUE), .groups = "drop")
 
         tidyr::expand_grid(
           outs = 0:2,
@@ -769,7 +769,7 @@ MLB_Scrape <- R6::R6Class(
           left_join(agg, by = c("outs","count","base_state")) %>%
           dplyr::arrange(outs, count, base_state) %>%
           dplyr::mutate(run_expectancy = round(run_expectancy, 2)) %>%
-          arrange(-run_expectancy)
+          dplyr::arrange(-run_expectancy)
       }
 
     },
@@ -802,7 +802,7 @@ MLB_Scrape <- R6::R6Class(
         left_join(guts %>%
                     dplyr::select(c(Season, w1B, w2B, w3B, wHR, wHBP, wBB)),
                   by = c("year" = "Season")) %>%
-        mutate(
+        dplyr::mutate(
           wOBA = case_when(
             event_type == "single" ~ w1B,
             event_type == "double" ~ w2B,
@@ -829,9 +829,6 @@ MLB_Scrape <- R6::R6Class(
           base_state = paste0(as.integer(!is.na(pre_runner_1b_id)),
                               as.integer(!is.na(pre_runner_2b_id)),
                               as.integer(!is.na(pre_runner_3b_id))),
-          outs    = pmin(pmax(as.integer(outs),    0L), 2L),
-          balls   = pmin(pmax(as.integer(balls),   0L), 3L),
-          strikes = pmin(pmax(as.integer(strikes), 0L), 2L),
           count   = paste0(balls, "-", strikes)
         ) %>%
         left_join(re288, by = c("outs","count","base_state")) %>%
