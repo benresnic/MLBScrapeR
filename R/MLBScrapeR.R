@@ -831,7 +831,7 @@ MLB_Scrape <- R6::R6Class(
       
       re_lookup <- setNames(re_map$run_expectancy, re_map$key)
       
-      data %>%
+      df %>%
         dplyr::mutate(
           half = paste(game_id, inning, top_bottom, sep = "_"),
           batting_score  = ifelse(top_bottom == "top", away_score, home_score),
